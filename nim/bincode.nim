@@ -1,7 +1,7 @@
 
 import os
 
-const projectRoot = parentDir(currentSourcePath())
+const projectRoot = parentDir(parentDir(currentSourcePath()))
 const libPath = projectRoot / "target" / "release"
 
 {.passC: "-I" & projectRoot.}

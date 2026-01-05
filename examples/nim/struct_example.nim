@@ -1,5 +1,5 @@
 
-import bincode
+import ../../nim/bincode
 
 type
   Person* = object

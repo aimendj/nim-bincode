@@ -27,10 +27,10 @@ The compiled library will be located at:
 
 ### 2. Use in your Nim project
 
-The `bincode.nim` module provides bindings to the Rust library. You can use it in your Nim code:
+The `nim/bincode.nim` module provides bindings to the Rust library. You can use it in your Nim code:
 
 ```nim
-import bincode
+import nim/bincode
 
 # Serialize bytes
 let data = @[byte(1), 2, 3, 4, 5]
@@ -51,11 +51,14 @@ When compiling your Nim program, make sure the library path is correct:
 nim c -L:target/release your_program.nim
 ```
 
-Or use the example:
+Or use the examples:
 
 ```bash
-nim c -L:target/release example.nim
+nim c -L:target/release examples/nim/example.nim
 ./example
+
+nim c -L:target/release examples/nim/struct_example.nim
+./struct_example
 ```
 
 ### 4. Run Rust examples
@@ -78,11 +81,11 @@ The project includes Nim examples:
 
 ```bash
 # Simple example (bytes and strings)
-nim c example.nim
+nim c -L:target/release examples/nim/example.nim
 ./example
 
 # Struct example (matching Rust direct_example.rs)
-nim c struct_example.nim
+nim c -L:target/release examples/nim/struct_example.nim
 ./struct_example
 ```
 
@@ -93,14 +96,17 @@ nim c struct_example.nim
 ├── Cargo.toml          # Rust project configuration
 ├── cbindgen.toml       # Configuration for C header generation
 ├── build.rs            # Build script that generates C headers
+├── build.sh            # Convenience build script
 ├── src/
 │   └── lib.rs          # Rust FFI wrapper implementation
+├── nim/
+│   └── bincode.nim     # Nim bindings module
 ├── examples/
-│   ├── simple_example.rs  # Rust example matching example.nim
-│   └── direct_example.rs  # Rust example with struct serialization
-├── bincode.nim         # Nim bindings module
-├── example.nim         # Nim example (bytes and strings)
-├── struct_example.nim  # Nim example matching direct_example.rs
+│   ├── simple_example.rs      # Rust example (bytes and strings)
+│   ├── direct_example.rs      # Rust example with struct serialization
+│   └── nim/
+│       ├── example.nim        # Nim example (bytes and strings)
+│       └── struct_example.nim  # Nim example matching direct_example.rs
 └── README.md           # This file
 ```
 
