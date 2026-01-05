@@ -89,6 +89,28 @@ nim c -L:target/release examples/nim/struct_example.nim
 ./struct_example
 ```
 
+### 6. Run tests
+
+The project includes comprehensive tests that verify the FFI functions work correctly by comparing them with the native bincode API:
+
+```bash
+# Run all tests
+cargo test
+
+# Run only the FFI integration tests
+cargo test --test ffi_tests
+
+# Run tests with output
+cargo test -- --nocapture
+```
+
+The tests verify that:
+- FFI serialization matches native bincode serialization
+- FFI deserialization matches native bincode deserialization
+- Roundtrip serialization/deserialization works correctly
+- Various data types are handled correctly (strings, integers, mixed data)
+- Edge cases are handled (empty vectors, null pointers, etc.)
+
 ## Project Structure
 
 ```
@@ -96,7 +118,6 @@ nim c -L:target/release examples/nim/struct_example.nim
 ├── Cargo.toml          # Rust project configuration
 ├── cbindgen.toml       # Configuration for C header generation
 ├── build.rs            # Build script that generates C headers
-├── build.sh            # Convenience build script
 ├── src/
 │   └── lib.rs          # Rust FFI wrapper implementation
 ├── nim/
@@ -107,6 +128,8 @@ nim c -L:target/release examples/nim/struct_example.nim
 │   └── nim/
 │       ├── example.nim        # Nim example (bytes and strings)
 │       └── struct_example.nim  # Nim example matching direct_example.rs
+├── tests/
+│   └── ffi_tests.rs    # Integration tests for FFI functions
 └── README.md           # This file
 ```
 
