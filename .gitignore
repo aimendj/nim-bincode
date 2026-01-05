@@ -1,0 +1,27 @@
+# Rust
+target/
+Cargo.lock
+*.pdb
+
+# Generated files
+bincode_wrapper.h
+
+# Nim
+*.exe
+nimcache/
+*.o
+*.obj
+example
+struct_example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
