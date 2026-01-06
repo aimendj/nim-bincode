@@ -1,5 +1,5 @@
-
 import os
+import stew/endians2
 
 const projectRoot = parentDir(parentDir(currentSourcePath()))
 const libPath = projectRoot / "target" / "release"
@@ -91,46 +91,28 @@ proc deserializeString*(data: seq[byte]): string =
   copyMem(result[0].addr, bytes[0].addr, bytes.len)
 
 proc serializeInt32*(value: int32): seq[byte] =
-  var bytes = @[byte(value and 0xFF), 
-                byte((value shr 8) and 0xFF),
-                byte((value shr 16) and 0xFF), 
-                byte((value shr 24) and 0xFF)]
-  serialize(bytes)
+  serialize(toBytesLE(value.uint32))
 
 proc deserializeInt32*(data: seq[byte]): int32 =
   let bytes = deserialize(data)
   if bytes.len >= 4:
-    result = (bytes[0].int32) or 
-             (bytes[1].int32 shl 8) or
-             (bytes[2].int32 shl 16) or
-             (bytes[3].int32 shl 24)
+    result = fromBytesLE(uint32, bytes).int32
 
 proc serializeUint32*(value: uint32): seq[byte] =
-  var bytes = @[byte(value and 0xFF), 
-                byte((value shr 8) and 0xFF),
-                byte((value shr 16) and 0xFF), 
-                byte((value shr 24) and 0xFF)]
-  serialize(bytes)
+  serialize(toBytesLE(value))
 
 proc deserializeUint32*(data: seq[byte]): uint32 =
   let bytes = deserialize(data)
   if bytes.len >= 4:
-    result = (bytes[0].uint32) or 
-             (bytes[1].uint32 shl 8) or
-             (bytes[2].uint32 shl 16) or
-             (bytes[3].uint32 shl 24)
+    result = fromBytesLE(uint32, bytes)
 
 proc serializeInt64*(value: int64): seq[byte] =
-  var bytes = newSeq[byte](8)
-  for i in 0..<8:
-    bytes[i] = byte((value shr (i * 8)) and 0xFF)
-  serialize(bytes)
+  serialize(toBytesLE(value.uint64))
 
 proc deserializeInt64*(data: seq[byte]): int64 =
   let bytes = deserialize(data)
   if bytes.len >= 8:
-    for i in 0..<8:
-      result = result or (bytes[i].int64 shl (i * 8))
+    result = fromBytesLE(uint64, bytes).int64
 
 template serializeType*[T](value: T, toBytes: proc(x: T): seq[byte]): seq[byte] =
   serialize(toBytes(value))
