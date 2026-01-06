@@ -4,9 +4,9 @@ import stew/endians2
 const projectRoot = parentDir(parentDir(currentSourcePath()))
 const libPath = projectRoot / "target" / "release"
 
-{.passC: "-I" & projectRoot.}
-{.passL: "-L" & libPath}
-{.passL: "-lbincode_wrapper"}
+{.passc: "-I" & projectRoot.}
+{.passl: "-L" & libPath}
+{.passl: "-lbincode_wrapper"}
 
 type
   BincodeError* = enum
