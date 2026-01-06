@@ -1,6 +1,6 @@
 {.push raises: [], gcsafe.}
 
-import ../../nim/bincode
+import ../bincode
 
 type Person* = object
   name*: string

@@ -88,10 +88,10 @@ cargo run --example direct_example
 nimble develop
 
 # Compile and run examples
-nim c -L:target/release examples/nim/example.nim
+nim c -L:target/release nim/examples/example.nim
 ./example
 
-nim c -L:target/release examples/nim/struct_example.nim
+nim c -L:target/release nim/examples/struct_example.nim
 ./struct_example
 ```
 
@@ -139,12 +139,11 @@ nph nim/bincode.nim
 ```bash
 # Format an entire directory
 nph nim/
-nph examples/nim/
 
 # Or format files individually
 nph nim/bincode.nim
-nph examples/nim/example.nim
-nph examples/nim/struct_example.nim
+nph nim/examples/example.nim
+nph nim/examples/struct_example.nim
 ```
 
 ### Check formatting (useful in CI)
@@ -170,13 +169,14 @@ nph --diff nim/bincode.nim
 ├── src/
 │   └── lib.rs          # Rust FFI wrapper
 ├── nim/
-│   └── bincode.nim     # Nim bindings
+│   ├── bincode.nim     # Nim bindings
+│   ├── examples/
+│   │   ├── example.nim
+│   │   └── struct_example.nim
+│   └── tests/          # Nim tests
 ├── examples/
 │   ├── simple_example.rs
-│   ├── direct_example.rs
-│   └── nim/
-│       ├── example.nim
-│       └── struct_example.nim
+│   └── direct_example.rs
 ├── tests/
 │   └── ffi_tests.rs    # Integration tests
 └── README.md

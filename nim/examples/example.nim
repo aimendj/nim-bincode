@@ -1,6 +1,6 @@
 {.push raises: [], gcsafe.}
 
-import ../../nim/bincode
+import ../bincode
 let original = @[byte(1), 2, 3, 4, 5]
 echo "Original bytes: ", original
 
