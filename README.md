@@ -5,7 +5,7 @@ Nim bindings for the Rust [bincode](https://crates.io/crates/bincode) serializat
 ## Prerequisites
 
 - Rust (with cargo) - [Install Rust](https://www.rust-lang.org/tools/install)
-- Nim compiler - [Install Nim](https://nim-lang.org/install.html)
+- Nim compiler and nimble - [Install Nim](https://nim-lang.org/install.html) (includes nimble)
 - cbindgen (installed automatically via build dependencies)
 
 ## Building
@@ -27,6 +27,12 @@ The Nim bindings use static linking by default, producing self-contained executa
 
 ### In Nim
 
+First, set up dependencies:
+
+```bash
+nimble develop
+```
+
 The `nim/bincode.nim` module provides bindings to the Rust library:
 
 ```nim
@@ -46,8 +52,11 @@ let deserializedText = deserializeString(serializedText)
 Compile your Nim program with:
 
 ```bash
+nimble develop
 nim c -L:target/release your_program.nim
 ```
+
+The `nimble develop` command sets up the environment with all dependencies, then you can use `nim c` to compile your program.
 
 The bindings automatically link the static library (`libbincode_wrapper.a`), producing a single statically-linked binary.
 
@@ -75,6 +84,10 @@ cargo run --example direct_example
 ### Nim examples
 
 ```bash
+# Set up dependencies with nimble
+nimble develop
+
+# Compile and run examples
 nim c -L:target/release examples/nim/example.nim
 ./example
 
@@ -108,6 +121,7 @@ Tests verify:
 ```
 .
 ├── Cargo.toml          # Rust project configuration
+├── bincode.nimble      # Nim package configuration
 ├── cbindgen.toml       # C header generation config
 ├── build.rs            # Build script
 ├── src/

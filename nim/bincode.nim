@@ -91,7 +91,7 @@ proc deserializeString*(data: seq[byte]): string =
   copyMem(result[0].addr, bytes[0].addr, bytes.len)
 
 proc serializeInt32*(value: int32): seq[byte] =
-  serialize(toBytesLE(value.uint32))
+  serialize(@(toBytesLE(value.uint32)))
 
 proc deserializeInt32*(data: seq[byte]): int32 =
   let bytes = deserialize(data)
@@ -99,7 +99,7 @@ proc deserializeInt32*(data: seq[byte]): int32 =
     result = fromBytesLE(uint32, bytes).int32
 
 proc serializeUint32*(value: uint32): seq[byte] =
-  serialize(toBytesLE(value))
+  serialize(@(toBytesLE(value)))
 
 proc deserializeUint32*(data: seq[byte]): uint32 =
   let bytes = deserialize(data)
@@ -107,7 +107,7 @@ proc deserializeUint32*(data: seq[byte]): uint32 =
     result = fromBytesLE(uint32, bytes)
 
 proc serializeInt64*(value: int64): seq[byte] =
-  serialize(toBytesLE(value.uint64))
+  serialize(@(toBytesLE(value.uint64)))
 
 proc deserializeInt64*(data: seq[byte]): int64 =
   let bytes = deserialize(data)
