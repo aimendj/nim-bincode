@@ -16,10 +16,16 @@ struct_example
 
 # IDE
 .idea/
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
 *.swp
 *.swo
 *~
+
+# Build output
+bin/
 
 # OS
 .DS_Store
