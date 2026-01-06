@@ -1,3 +1,5 @@
+{.push raises: [], gcsafe.}
+
 import os
 import stew/endians2
 
@@ -24,7 +26,7 @@ proc bincode_free_buffer*(
 
 proc bincode_get_serialized_length*(data: ptr uint8, len: csize_t): csize_t {.importc.}
 
-proc serialize*(data: openArray[byte]): seq[byte] =
+proc serialize*(data: openArray[byte]): seq[byte] {.raises: [BincodeDefect].} =
   if data.len == 0:
     return @[]
 
@@ -40,7 +42,7 @@ proc serialize*(data: openArray[byte]): seq[byte] =
     bincode_free_buffer(bufferPtr, outLen)
   return output
 
-proc deserialize*(data: openArray[byte]): seq[byte] =
+proc deserialize*(data: openArray[byte]): seq[byte] {.raises: [BincodeDefect].} =
   if data.len == 0:
     raise newException(BincodeDefect, "Cannot deserialize empty data")
 
@@ -56,7 +58,7 @@ proc deserialize*(data: openArray[byte]): seq[byte] =
     bincode_free_buffer(bufferPtr, outLen)
   return output
 
-proc serializeString*(s: string): seq[byte] =
+proc serializeString*(s: string): seq[byte] {.raises: [BincodeDefect].} =
   if s.len == 0:
     return serialize(@[])
   var bytes = newSeq[byte](s.len)
@@ -64,7 +66,7 @@ proc serializeString*(s: string): seq[byte] =
     bytes[i] = byte(s[i])
   serialize(bytes)
 
-proc deserializeString*(data: openArray[byte]): string =
+proc deserializeString*(data: openArray[byte]): string {.raises: [BincodeDefect].} =
   let bytes = deserialize(data)
   if bytes.len == 0:
     return ""
@@ -72,28 +74,28 @@ proc deserializeString*(data: openArray[byte]): string =
   copyMem(output[0].addr, bytes[0].addr, bytes.len)
   return output
 
-proc serializeInt32*(value: int32): seq[byte] =
+proc serializeInt32*(value: int32): seq[byte] {.raises: [BincodeDefect].} =
   serialize(@(toBytesLE(value.uint32)))
 
-proc deserializeInt32*(data: openArray[byte]): int32 =
+proc deserializeInt32*(data: openArray[byte]): int32 {.raises: [BincodeDefect].} =
   let bytes = deserialize(data)
   if bytes.len < 4:
     raise newException(BincodeDefect, "Cannot deserialize int32: insufficient data")
   return fromBytesLE(uint32, bytes).int32
 
-proc serializeUint32*(value: uint32): seq[byte] =
+proc serializeUint32*(value: uint32): seq[byte] {.raises: [BincodeDefect].} =
   serialize(@(toBytesLE(value)))
 
-proc deserializeUint32*(data: openArray[byte]): uint32 =
+proc deserializeUint32*(data: openArray[byte]): uint32 {.raises: [BincodeDefect].} =
   let bytes = deserialize(data)
   if bytes.len < 4:
     raise newException(BincodeDefect, "Cannot deserialize uint32: insufficient data")
   return fromBytesLE(uint32, bytes)
 
-proc serializeInt64*(value: int64): seq[byte] =
+proc serializeInt64*(value: int64): seq[byte] {.raises: [BincodeDefect].} =
   serialize(@(toBytesLE(value.uint64)))
 
-proc deserializeInt64*(data: openArray[byte]): int64 =
+proc deserializeInt64*(data: openArray[byte]): int64 {.raises: [BincodeDefect].} =
   let bytes = deserialize(data)
   if bytes.len < 8:
     raise newException(BincodeDefect, "Cannot deserialize int64: insufficient data")
@@ -106,3 +108,5 @@ template deserializeType*[T](
     data: openArray[byte], fromBytes: proc(x: seq[byte]): T
 ): T =
   fromBytes(deserialize(data))
+
+{.pop.}

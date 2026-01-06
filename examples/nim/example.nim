@@ -1,3 +1,5 @@
+{.push raises: [], gcsafe.}
+
 import ../../nim/bincode
 let original = @[byte(1), 2, 3, 4, 5]
 echo "Original bytes: ", original
@@ -19,3 +21,5 @@ echo "Serialized Text: ", serializedText
 let deserializedText = deserializeString(serializedText)
 echo "Deserialized string: ", deserializedText
 echo "Match: ", text == deserializedText
+
+{.pop.}

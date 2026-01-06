@@ -1,3 +1,5 @@
+{.push raises: [], gcsafe.}
+
 import ../../nim/bincode
 
 type Person* = object
@@ -70,7 +72,7 @@ proc bytesToPerson(data: seq[byte]): Person =
       for i in 0 ..< int(emailLen):
         result.email[i] = char(data[offset + i])
 
-proc main() =
+proc main() {.raises: [BincodeDefect].} =
   echo "=== Struct Example (like Rust direct_example.rs) ===\n"
 
   let person = Person(name: "Alice", age: 30'u32, email: "alice@example.com")
@@ -108,3 +110,5 @@ proc main() =
   echo "Match: ", data == decodedBytes2
 
 main()
+
+{.pop.}
