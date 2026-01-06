@@ -19,4 +19,3 @@ echo "Serialized Text: ", serializedText
 let deserializedText = deserializeString(serializedText)
 echo "Deserialized string: ", deserializedText
 echo "Match: ", text == deserializedText
-

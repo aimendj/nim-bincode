@@ -116,6 +116,49 @@ Tests verify:
 - Various data types (strings, integers, structs, mixed data)
 - Edge cases (empty vectors, null pointers)
 
+## Formatting
+
+This project uses [nph](https://github.com/arnetheduck/nph) for formatting Nim source code. All Nim files should be formatted before committing.
+
+### Installation
+
+Install `nph` using nimble:
+
+```bash
+nimble install nph
+```
+
+### Format a single file
+
+```bash
+nph nim/bincode.nim
+```
+
+### Format all Nim files
+
+```bash
+# Format an entire directory
+nph nim/
+nph examples/nim/
+
+# Or format files individually
+nph nim/bincode.nim
+nph examples/nim/example.nim
+nph examples/nim/struct_example.nim
+```
+
+### Check formatting (useful in CI)
+
+```bash
+nph --check nim/bincode.nim || echo "Not formatted!"
+```
+
+### Show diff of formatting changes
+
+```bash
+nph --diff nim/bincode.nim
+```
+
 ## Project Structure
 
 ```

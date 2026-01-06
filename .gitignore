@@ -16,10 +16,7 @@ struct_example
 
 # IDE
 .idea/
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
+.vscode/
 *.swp
 *.swo
 *~
@@ -30,4 +27,3 @@ bin/
 # OS
 .DS_Store
 Thumbs.db
-
