@@ -1,6 +1,6 @@
 # Bincode Nim Bindings
 
-This project provides Nim bindings for the Rust [bincode](https://crates.io/crates/bincode) serialization library through a C-compatible FFI interface.
+Nim bindings for the Rust [bincode](https://crates.io/crates/bincode) serialization library through a C-compatible FFI interface.
 
 ## Prerequisites
 
@@ -10,24 +10,24 @@ This project provides Nim bindings for the Rust [bincode](https://crates.io/crat
 
 ## Building
 
-### 1. Build the Rust library
+### Build the Rust library
 
 ```bash
 cargo build --release
 ```
 
-This will:
-- Compile the Rust wrapper library as a shared library (`.so` on Linux, `.dylib` on macOS, `.dll` on Windows)
-- Generate the C header file `bincode_wrapper.h` automatically via `build.rs`
+This compiles the Rust wrapper as a static library and generates the C header file `bincode_wrapper.h`:
 
-The compiled library will be located at:
-- Linux: `target/release/libbincode_wrapper.so`
-- macOS: `target/release/libbincode_wrapper.dylib`
-- Windows: `target/release/bincode_wrapper.dll`
+- Linux/macOS: `target/release/libbincode_wrapper.a`
+- Windows: `target/release/bincode_wrapper.lib`
 
-### 2. Use in your Nim project
+The Nim bindings use static linking by default, producing self-contained executables without runtime dependencies.
 
-The `nim/bincode.nim` module provides bindings to the Rust library. You can use it in your Nim code:
+## Usage
+
+### In Nim
+
+The `nim/bincode.nim` module provides bindings to the Rust library:
 
 ```nim
 import nim/bincode
@@ -43,123 +43,114 @@ let serializedText = serializeString(text)
 let deserializedText = deserializeString(serializedText)
 ```
 
-### 3. Compile your Nim program
-
-When compiling your Nim program, make sure the library path is correct:
+Compile your Nim program with:
 
 ```bash
 nim c -L:target/release your_program.nim
 ```
 
-Or use the examples:
+The bindings automatically link the static library (`libbincode_wrapper.a`), producing a single statically-linked binary.
 
-```bash
-nim c -L:target/release examples/nim/example.nim
-./example
+### In Rust
 
-nim c -L:target/release examples/nim/struct_example.nim
-./struct_example
+The FFI functions are for calling from other languages. In Rust, use bincode directly:
+
+```rust
+use bincode;
+
+let data = vec![1u8, 2, 3, 4, 5];
+let encoded = bincode::encode_to_vec(&data, bincode::config::standard())?;
+let (decoded, _): (Vec<u8>, _) = bincode::decode_from_slice(&encoded, bincode::config::standard())?;
 ```
 
-### 4. Run Rust examples
+## Examples
 
-The project includes Rust examples:
+### Rust examples
 
 ```bash
-# Example matching the Nim example.nim (bytes and strings)
 cargo run --example simple_example
-
-# Example showing struct serialization (like direct_example.rs)
 cargo run --example direct_example
 ```
 
-**Note:** The FFI functions in `lib.rs` are designed for calling from other languages (like Nim, C, Python, etc.). If you're using Rust, you should use bincode directly as shown in the examples, not through the FFI layer.
-
-### 5. Run Nim examples
-
-The project includes Nim examples:
+### Nim examples
 
 ```bash
-# Simple example (bytes and strings)
 nim c -L:target/release examples/nim/example.nim
 ./example
 
-# Struct example (matching Rust direct_example.rs)
 nim c -L:target/release examples/nim/struct_example.nim
 ./struct_example
 ```
 
-### 6. Run tests
+## Testing
 
-The project includes comprehensive tests that verify the FFI functions work correctly by comparing them with the native bincode API:
+Run tests to verify FFI functions match native bincode behavior:
 
 ```bash
 # Run all tests
 cargo test
 
-# Run only the FFI integration tests
+# Run only FFI integration tests
 cargo test --test ffi_tests
 
-# Run tests with output
+# Run with output
 cargo test -- --nocapture
 ```
 
-The tests verify that:
-- FFI serialization matches native bincode serialization
-- FFI deserialization matches native bincode deserialization
-- Roundtrip serialization/deserialization works correctly
-- Various data types are handled correctly (strings, integers, mixed data)
-- Edge cases are handled (empty vectors, null pointers, etc.)
+Tests verify:
+- FFI serialization/deserialization matches native bincode
+- Roundtrip serialization works correctly
+- Various data types (strings, integers, structs, mixed data)
+- Edge cases (empty vectors, null pointers)
 
 ## Project Structure
 
 ```
 .
 ├── Cargo.toml          # Rust project configuration
-├── cbindgen.toml       # Configuration for C header generation
-├── build.rs            # Build script that generates C headers
+├── cbindgen.toml       # C header generation config
+├── build.rs            # Build script
 ├── src/
-│   └── lib.rs          # Rust FFI wrapper implementation
+│   └── lib.rs          # Rust FFI wrapper
 ├── nim/
-│   └── bincode.nim     # Nim bindings module
+│   └── bincode.nim     # Nim bindings
 ├── examples/
-│   ├── simple_example.rs      # Rust example (bytes and strings)
-│   ├── direct_example.rs      # Rust example with struct serialization
+│   ├── simple_example.rs
+│   ├── direct_example.rs
 │   └── nim/
-│       ├── example.nim        # Nim example (bytes and strings)
-│       └── struct_example.nim  # Nim example matching direct_example.rs
+│       ├── example.nim
+│       └── struct_example.nim
 ├── tests/
-│   └── ffi_tests.rs    # Integration tests for FFI functions
-└── README.md           # This file
+│   └── ffi_tests.rs    # Integration tests
+└── README.md
 ```
 
-## API Overview
+## API
 
 ### Low-level FFI Functions
 
 - `bincode_serialize(data, len, out_len)`: Serialize bytes to bincode format
 - `bincode_deserialize(data, len, out_len)`: Deserialize bincode data to bytes
 - `bincode_free_buffer(ptr, len)`: Free memory allocated by bincode functions
-- `bincode_get_serialized_length(data, len)`: Get the length of serialized data
+- `bincode_get_serialized_length(data, len)`: Get serialized data length
 
 ### High-level Nim API
 
 - `serialize(data: seq[byte]): seq[byte]`: Serialize a sequence of bytes
 - `deserialize(data: seq[byte]): seq[byte]`: Deserialize bincode-encoded data
-- `serializeString(s: string): seq[byte]`: Serialize a string (converts to UTF-8 bytes)
-- `deserializeString(data: seq[byte]): string`: Deserialize a string (interprets bytes as UTF-8)
+- `serializeString(s: string): seq[byte]`: Serialize a string (UTF-8)
+- `deserializeString(data: seq[byte]): string`: Deserialize a string (UTF-8)
 
 ## Memory Management
 
-The Rust FFI functions allocate memory that must be freed using `bincode_free_buffer`. The high-level Nim API (`serialize`, `deserialize`, etc.) handles memory management automatically, so you don't need to manually free memory when using those functions.
+The Rust FFI functions allocate memory that must be freed using `bincode_free_buffer`. The high-level Nim API handles memory management automatically.
 
 ## Notes
 
-- The current implementation serializes/deserializes `Vec<u8>` (byte vectors), which provides a generic way to work with arbitrary binary data
-- For more complex types, you would need to extend the Rust wrapper to handle specific serde-serializable types
-- The library uses bincode's standard configuration
+- The implementation serializes/deserializes `Vec<u8>` (byte vectors) for generic binary data handling
+- Uses bincode's standard configuration
+- For complex types, extend the Rust wrapper to handle specific serde-serializable types
 
 ## License
 
-This project follows the same license as the bincode crate (MIT/Apache-2.0).
-
+MIT/Apache-2.0 (same as bincode crate)

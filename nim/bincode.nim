@@ -6,15 +6,7 @@ const libPath = projectRoot / "target" / "release"
 
 {.passC: "-I" & projectRoot.}
 {.passL: "-L" & libPath}
-{.passL: "-Wl,-rpath," & libPath.}
 {.passL: "-lbincode_wrapper"}
-
-when defined(windows):
-  const libName* = "bincode_wrapper.dll"
-elif defined(macosx):
-  const libName* = "libbincode_wrapper.dylib"
-else:
-  const libName* = "libbincode_wrapper.so"
 
 type
   BincodeError* = enum
@@ -27,23 +19,23 @@ proc bincode_serialize*(
     data: ptr uint8,
     len: csize_t,
     out_len: ptr csize_t
-): ptr uint8 {.importc, dynlib: libName.}
+): ptr uint8 {.importc.}
 
 proc bincode_deserialize*(
     data: ptr uint8,
     len: csize_t,
     out_len: ptr csize_t
-): ptr uint8 {.importc, dynlib: libName.}
+): ptr uint8 {.importc.}
 
 proc bincode_free_buffer*(
     buffer: ptr uint8,
     len: csize_t
-) {.importc: "bincode_free_buffer", dynlib: libName.}
+) {.importc: "bincode_free_buffer".}
 
 proc bincode_get_serialized_length*(
     data: ptr uint8,
     len: csize_t
-): csize_t {.importc, dynlib: libName.}
+): csize_t {.importc.}
 
 proc serialize*(data: seq[byte]): seq[byte] =
   if data.len == 0:
