@@ -10,7 +10,6 @@ pub enum BincodeError {
 }
 
 /// # Safety
-/// This function is unsafe because it dereferences raw pointers.
 /// The `data` pointer must point to valid memory containing the data to serialize.
 /// The returned pointer must be freed using `bincode_free_buffer`.
 #[no_mangle]
@@ -42,7 +41,6 @@ pub unsafe extern "C" fn bincode_serialize(
 }
 
 /// # Safety
-/// This function is unsafe because it dereferences raw pointers.
 /// The `data` pointer must point to valid bincode-encoded data.
 /// The returned pointer must be freed using `bincode_free_buffer`.
 #[no_mangle]
@@ -76,7 +74,6 @@ pub unsafe extern "C" fn bincode_deserialize(
 }
 
 /// # Safety
-/// This function is unsafe because it frees memory.
 /// The `ptr` must be a pointer returned by `bincode_serialize` or `bincode_deserialize`.
 /// The `len` must be the length of the buffer.
 #[no_mangle]
