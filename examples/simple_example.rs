@@ -39,6 +39,23 @@ fn main() {
     let deserialized_text = String::from_utf8(deserialized_bytes)
         .expect("Failed to convert bytes to string");
     println!("Deserialized string: {}", deserialized_text);
-    println!("Match: {}", text == deserialized_text);
+    println!("Match: {}\n", text == deserialized_text);
+
+    // Serialize an empty array
+    let empty_array: Vec<u8> = vec![];
+    println!("Original empty array: {:?}", empty_array);
+    let serialized_empty = bincode::encode_to_vec(&empty_array, bincode::config::standard())
+        .expect("Failed to serialize empty array");
+    println!("Serialized empty array length: {}", serialized_empty.len());
+    println!("Serialized empty array bytes: {:?}", serialized_empty);
+
+    let (deserialized_empty, _): (Vec<u8>, _) = bincode::decode_from_slice(
+        &serialized_empty,
+        bincode::config::standard(),
+    )
+    .expect("Failed to deserialize empty array");
+
+    println!("Deserialized empty array: {:?}", deserialized_empty);
+    println!("Match: {}", empty_array == deserialized_empty);
 }
 

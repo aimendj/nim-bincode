@@ -332,16 +332,79 @@ fn test_ffi_get_serialized_length() {
 // ============================================================================
 
 #[test]
+fn test_ffi_empty_array() {
+    let empty_array: Vec<u8> = vec![];
+    
+    let native_serialized = bincode::encode_to_vec(&empty_array, bincode::config::standard())
+        .expect("Native serialization of empty array failed");
+    
+    let ffi_serialized = serialize_via_ffi(&empty_array)
+        .expect("FFI serialization of empty array failed");
+    
+    assert_eq!(native_serialized, ffi_serialized, 
+        "FFI serialization of empty array doesn't match native");
+    
+    let (native_deserialized, _): (Vec<u8>, _) = bincode::decode_from_slice(
+        &native_serialized,
+        bincode::config::standard(),
+    ).expect("Native deserialization of empty array failed");
+    
+    let ffi_deserialized = deserialize_via_ffi(&ffi_serialized)
+        .expect("FFI deserialization of empty array failed");
+    
+    assert_eq!(native_deserialized, ffi_deserialized,
+        "FFI deserialization of empty array doesn't match native");
+    assert_eq!(empty_array, ffi_deserialized,
+        "FFI roundtrip of empty array failed");
+    
+    let roundtrip_result = deserialize_via_ffi(&serialize_via_ffi(&empty_array).unwrap())
+        .expect("FFI roundtrip of empty array failed");
+    assert_eq!(empty_array, roundtrip_result,
+        "FFI roundtrip of empty array doesn't match original");
+    
+    unsafe {
+        let mut out_len = 0;
+        let result = bincode_serialize(ptr::null(), 0, &mut out_len);
+        assert!(!result.is_null(), "Should serialize empty array with null pointer");
+        let serialized_bytes = if out_len == 0 {
+            Vec::new()
+        } else {
+            slice::from_raw_parts(result, out_len).to_vec()
+        };
+        bincode_free_buffer(result, out_len);
+        
+        let expected_serialized = bincode::encode_to_vec(&empty_array, bincode::config::standard())
+            .expect("Failed to encode empty array");
+        assert_eq!(serialized_bytes, expected_serialized,
+            "Serialized empty array should match expected bincode encoding");
+        
+        let (deserialized, _): (Vec<u8>, _) = bincode::decode_from_slice(
+            &serialized_bytes,
+            bincode::config::standard(),
+        ).expect("Failed to deserialize empty array");
+        assert_eq!(deserialized, empty_array,
+            "Deserialized empty array should match original");
+    }
+}
+
+#[test]
 fn test_ffi_null_pointer_handling() {
     unsafe {
         let mut out_len = 0;
         let result = bincode_serialize(ptr::null(), 0, &mut out_len);
-        assert!(result.is_null(), "Should return null for null input");
+        assert!(!result.is_null(), "Should serialize empty array successfully");
+        bincode_free_buffer(result, out_len);
         
-        let result = bincode_deserialize(ptr::null(), 0, &mut out_len);
-        assert!(result.is_null(), "Should return null for null input");
+        let empty_encoded = bincode::encode_to_vec(&Vec::<u8>::new(), bincode::config::standard())
+            .expect("Failed to encode empty vec");
+        let result = bincode_deserialize(empty_encoded.as_ptr(), empty_encoded.len(), &mut out_len);
+        assert!(!result.is_null(), "Should deserialize empty array successfully");
+        bincode_free_buffer(result, out_len);
+        
+        let result = bincode_serialize(ptr::null(), 5, &mut out_len);
+        assert!(result.is_null(), "Should return null for null pointer with non-zero length");
         
         let len = bincode_get_serialized_length(ptr::null(), 0);
-        assert_eq!(len, 0, "Should return 0 for null input");
+        assert_eq!(len, 0, "Should return 0 for null input with length 0");
     }
 }

@@ -18,12 +18,19 @@ pub unsafe extern "C" fn bincode_serialize(
     len: usize,
     out_len: *mut usize,
 ) -> *mut u8 {
-    if data.is_null() || out_len.is_null() {
+    if out_len.is_null() {
         return ptr::null_mut();
     }
-
-    let slice = slice::from_raw_parts(data, len);
-    let vec: Vec<u8> = slice.to_vec();
+    
+    let vec = if len == 0 {
+        Vec::<u8>::new()
+    } else {
+        if data.is_null() {
+            return ptr::null_mut();
+        }
+        let slice = slice::from_raw_parts(data, len);
+        slice.to_vec()
+    };
     
     match bincode::encode_to_vec(&vec, bincode::config::standard()) {
         Ok(encoded) => {
@@ -49,11 +56,18 @@ pub unsafe extern "C" fn bincode_deserialize(
     len: usize,
     out_len: *mut usize,
 ) -> *mut u8 {
-    if data.is_null() || out_len.is_null() {
+    if out_len.is_null() {
         return ptr::null_mut();
     }
-
-    let slice = slice::from_raw_parts(data, len);
+    
+    let slice = if len == 0 {
+        &[]
+    } else {
+        if data.is_null() {
+            return ptr::null_mut();
+        }
+        slice::from_raw_parts(data, len)
+    };
     
     match bincode::decode_from_slice::<Vec<u8>, _>(
         slice,

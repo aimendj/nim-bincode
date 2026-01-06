@@ -13,6 +13,7 @@ nimcache/
 *.obj
 example
 struct_example
+test_bincode
 
 # IDE
 .idea/
