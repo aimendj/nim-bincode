@@ -10,5 +10,5 @@ bin           = @["bincode"]
 # Dependencies
 
 requires "nim >= 2.0.0"
-requires "stew"
+requires "stew >= 0.4.2"
 
