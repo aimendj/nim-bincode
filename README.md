@@ -5,7 +5,8 @@ Nim bindings for the Rust [bincode](https://crates.io/crates/bincode) serializat
 ## Prerequisites
 
 - Rust (with cargo) - [Install Rust](https://www.rust-lang.org/tools/install)
-- Nim compiler and nimble - [Install Nim](https://nim-lang.org/install.html) (includes nimble)
+- Nim compiler - [Install Nim](https://nim-lang.org/install.html)
+- Make - Usually pre-installed on Unix systems
 - cbindgen (installed automatically via build dependencies)
 
 ## Building
@@ -13,6 +14,8 @@ Nim bindings for the Rust [bincode](https://crates.io/crates/bincode) serializat
 ### Build the Rust library
 
 ```bash
+make build
+# or
 cargo build --release
 ```
 
@@ -23,14 +26,41 @@ This compiles the Rust wrapper as a static library and generates the C header fi
 
 The Nim bindings use static linking by default, producing self-contained executables without runtime dependencies.
 
+### Install Nim dependencies
+
+Before building Nim code, install the required dependencies:
+
+```bash
+make install-deps
+```
+
+This vendors the `stew` package (required for endian conversion utilities) into the `vendor/` directory.
+
+### Makefile Targets
+
+The project includes a Makefile for common tasks:
+
+- `make help` - Show all available targets
+- `make build` or `make rust-build` - Build Rust library and generate C header
+- `make install-deps` - Install/vendor Nim dependencies (stew)
+- `make nim-build` - Build Nim examples
+- `make examples` - Build and run Nim examples
+- `make test` - Run all tests (Rust and Nim)
+- `make test-rust` - Run only Rust tests
+- `make test-nim` - Run only Nim tests
+- `make format` - Format all Nim files
+- `make format-check` - Check if Nim files are formatted
+- `make clean` - Clean all build artifacts
+
 ## Usage
 
 ### In Nim
 
-First, set up dependencies:
+First, install dependencies and build the Rust library:
 
 ```bash
-nimble develop
+make install-deps
+make build
 ```
 
 The `nim/bincode.nim` module provides bindings to the Rust library:
@@ -52,11 +82,8 @@ let deserializedText = deserializeString(serializedText)
 Compile your Nim program with:
 
 ```bash
-nimble develop
 nim c -L:target/release your_program.nim
 ```
-
-The `nimble develop` command sets up the environment with all dependencies, then you can use `nim c` to compile your program.
 
 The bindings automatically link the static library (`libbincode_wrapper.a`), producing a single statically-linked binary.
 
@@ -84,15 +111,17 @@ cargo run --example direct_example
 ### Nim examples
 
 ```bash
-# Set up dependencies with nimble
-nimble develop
+# Install dependencies and build
+make install-deps
+make build
 
-# Compile and run examples
-nim c -L:target/release nim/examples/example.nim
-./example
+# Build and run examples
+make examples
 
-nim c -L:target/release nim/examples/struct_example.nim
-./struct_example
+# Or build examples manually
+make nim-build
+./bin/example
+./bin/struct_example
 ```
 
 ## Testing
@@ -100,14 +129,22 @@ nim c -L:target/release nim/examples/struct_example.nim
 Run tests to verify FFI functions match native bincode behavior:
 
 ```bash
-# Run all tests
+# Run all tests (Rust and Nim)
+make test
+
+# Run only Rust tests
+make test-rust
+# or
 cargo test
+
+# Run only Nim tests
+make test-nim
+
+# Run Rust tests with output
+cargo test -- --nocapture
 
 # Run only FFI integration tests
 cargo test --test ffi_tests
-
-# Run with output
-cargo test -- --nocapture
 ```
 
 Tests verify:
@@ -122,39 +159,34 @@ This project uses [nph](https://github.com/arnetheduck/nph) for formatting Nim s
 
 ### Installation
 
-Install `nph` using nimble:
+Install `nph` (optional, for code formatting):
 
 ```bash
 nimble install nph
 ```
 
-### Format a single file
-
-```bash
-nph nim/bincode.nim
-```
-
 ### Format all Nim files
 
 ```bash
-# Format an entire directory
-nph nim/
-
-# Or format files individually
-nph nim/bincode.nim
-nph nim/examples/example.nim
-nph nim/examples/struct_example.nim
+make format
 ```
 
 ### Check formatting (useful in CI)
 
 ```bash
-nph --check nim/bincode.nim || echo "Not formatted!"
+make format-check
 ```
 
-### Show diff of formatting changes
+### Format individual files
 
 ```bash
+# Format a single file
+nph nim/bincode.nim
+
+# Format an entire directory
+nph nim/
+
+# Show diff of formatting changes
 nph --diff nim/bincode.nim
 ```
 
@@ -163,7 +195,7 @@ nph --diff nim/bincode.nim
 ```
 .
 ├── Cargo.toml          # Rust project configuration
-├── bincode.nimble      # Nim package configuration
+├── Makefile            # Build automation
 ├── cbindgen.toml       # C header generation config
 ├── build.rs            # Build script
 ├── src/
