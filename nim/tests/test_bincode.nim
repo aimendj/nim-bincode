@@ -17,9 +17,11 @@ suite "Basic serialize/deserialize":
   test "serialize and deserialize empty array":
     let original: seq[byte] = @[]
     let serialized = serialize(original)
-    # Empty arrays serialize to [0] (length prefix)
-    check serialized.len == 1
-    check serialized[0] == byte(0)
+    # With fixed integer encoding, empty arrays serialize to 8 zero bytes (u64 length prefix)
+    check serialized.len == 8
+    # All 8 bytes should be zero (little-endian u64 for length 0)
+    for i in 0 ..< serialized.len:
+      check serialized[i] == byte(0)
     check original == deserialize(serialized)
 
   test "serialize and deserialize single byte":

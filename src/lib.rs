@@ -9,6 +9,17 @@ pub enum BincodeError {
     DeserializationError = 3,
 }
 
+/// Create a bincode configuration that enforces:
+/// - Little endian byte order
+/// - Fixed integer encoding
+/// - 64 KiB limit
+fn bincode_config() -> impl bincode::config::Config {
+    bincode::config::standard()
+        .with_little_endian()
+        .with_fixed_int_encoding()
+        .with_limit::<65536>() // 64 KiB limit (65536 bytes)
+}
+
 /// # Safety
 /// The `data` pointer must point to valid memory containing the data to serialize.
 /// The returned pointer must be freed using `bincode_free_buffer`.
@@ -32,8 +43,19 @@ pub unsafe extern "C" fn bincode_serialize(
         slice.to_vec()
     };
     
-    match bincode::encode_to_vec(&vec, bincode::config::standard()) {
+    // Enforce 64 KiB limit before serialization
+    if vec.len() > 65536 {
+        *out_len = 0;
+        return ptr::null_mut();
+    }
+    
+    match bincode::encode_to_vec(&vec, bincode_config()) {
         Ok(encoded) => {
+            // Also check encoded size doesn't exceed limit
+            if encoded.len() > 65536 {
+                *out_len = 0;
+                return ptr::null_mut();
+            }
             let mut result = encoded.into_boxed_slice();
             let ptr = result.as_mut_ptr();
             *out_len = result.len();
@@ -71,9 +93,14 @@ pub unsafe extern "C" fn bincode_deserialize(
     
     match bincode::decode_from_slice::<Vec<u8>, _>(
         slice,
-        bincode::config::standard(),
+        bincode_config(),
     ) {
-        Ok((decoded, _)) => {
+        Ok((decoded, bytes_read)) => {
+            // Reject trailing bytes: ensure all input bytes were consumed
+            if bytes_read != slice.len() {
+                *out_len = 0;
+                return ptr::null_mut();
+            }
             let mut result = decoded.into_boxed_slice();
             let ptr = result.as_mut_ptr();
             *out_len = result.len();
@@ -111,7 +138,7 @@ pub extern "C" fn bincode_get_serialized_length(
     unsafe {
         let slice = slice::from_raw_parts(data, len);
         let vec: Vec<u8> = slice.to_vec();
-        match bincode::encode_to_vec(&vec, bincode::config::standard()) {
+        match bincode::encode_to_vec(&vec, bincode_config()) {
             Ok(encoded) => encoded.len(),
             Err(_) => 0,
         }
