@@ -1,0 +1,3 @@
+[submodule "nim-stew"]
+	path = nim-stew
+	url = https://github.com/status-im/nim-stew.git

@@ -28,13 +28,21 @@ The Nim bindings use static linking by default, producing self-contained executa
 
 ### Install Nim dependencies
 
-Before building Nim code, install the required dependencies:
+Before building Nim code, initialize the git submodules:
 
 ```bash
 make install-deps
 ```
 
-This vendors the `stew` package (required for endian conversion utilities) into the `vendor/` directory.
+This initializes the `stew` git submodule (required for endian conversion utilities) in the `nim-stew` directory.
+
+Alternatively, if cloning the repository for the first time:
+
+```bash
+git clone --recursive <repository-url>
+# or after cloning
+git submodule update --init --recursive
+```
 
 ### Makefile Targets
 
@@ -42,7 +50,7 @@ The project includes a Makefile for common tasks:
 
 - `make help` - Show all available targets
 - `make build` or `make rust-build` - Build Rust library and generate C header
-- `make install-deps` - Install/vendor Nim dependencies (stew)
+- `make install-deps` - Initialize git submodules (stew)
 - `make nim-build` - Build Nim examples
 - `make examples` - Build and run Nim examples
 - `make test` - Run all tests (Rust and Nim)
@@ -206,6 +214,7 @@ nph --diff nim/bincode.nim
 │   │   ├── example.nim
 │   │   └── struct_example.nim
 │   └── tests/          # Nim tests
+├── nim-stew/           # Git submodule (stew dependency)
 ├── examples/
 │   ├── simple_example.rs
 │   └── direct_example.rs

@@ -38,14 +38,9 @@ build: rust-build
 
 # Install/vendor Nim dependencies
 install-deps:
-	@echo "Installing Nim dependencies..."
-	@if [ ! -d "vendor/stew" ]; then \
-		echo "Cloning stew into vendor/..."; \
-		mkdir -p vendor; \
-		git clone --depth 1 --branch v0.4.2 https://github.com/status-im/nim-stew.git vendor/stew || \
-		git clone --depth 1 https://github.com/status-im/nim-stew.git vendor/stew; \
-	fi
-	@echo "Dependencies installed in vendor/"
+	@echo "Initializing git submodules..."
+	@git submodule update --init --recursive
+	@echo "Dependencies installed via git submodules"
 
 # Build Nim examples
 nim-build: install-deps rust-build

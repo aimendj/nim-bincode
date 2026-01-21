@@ -25,9 +25,6 @@ test_bincode
 # Build output
 bin/
 
-# Vendor dependencies (optional - can be committed or ignored)
-# vendor/
-
 # OS
 .DS_Store
 Thumbs.db
