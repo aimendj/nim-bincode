@@ -71,10 +71,10 @@ make install-deps
 make build
 ```
 
-The `nim/bincode.nim` module provides bindings to the Rust library:
+The `nim/nim_bincode.nim` module provides bindings to the Rust library:
 
 ```nim
-import nim/bincode
+import nim/nim_bincode
 
 # Serialize bytes
 let data = @[byte(1), 2, 3, 4, 5]
@@ -189,13 +189,13 @@ make format-check
 
 ```bash
 # Format a single file
-nph nim/bincode.nim
+nph nim/nim_bincode.nim
 
 # Format an entire directory
 nph nim/
 
 # Show diff of formatting changes
-nph --diff nim/bincode.nim
+nph --diff nim/nim_bincode.nim
 ```
 
 ## Project Structure
@@ -209,7 +209,7 @@ nph --diff nim/bincode.nim
 ├── src/
 │   └── lib.rs          # Rust FFI wrapper
 ├── nim/
-│   ├── bincode.nim     # Nim bindings
+│   ├── nim_bincode.nim # Nim bindings
 │   ├── examples/
 │   │   ├── example.nim
 │   │   └── struct_example.nim

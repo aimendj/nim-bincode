@@ -2,7 +2,7 @@
 
 import unittest
 import strutils
-import ../bincode
+import ../nim_bincode
 
 # ============================================================================
 # Basic Serialization/Deserialization Tests

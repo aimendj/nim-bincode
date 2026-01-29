@@ -73,7 +73,7 @@ test-nim: install-deps rust-build
 # Format all Nim files
 format:
 	@echo "Formatting Nim files..."
-	nph nim/bincode.nim
+	nph nim/nim_bincode.nim
 	nph nim/examples/example.nim
 	nph nim/examples/struct_example.nim
 	nph nim/tests/test_bincode.nim
@@ -82,7 +82,7 @@ format:
 # Check if Nim files are formatted
 format-check:
 	@echo "Checking Nim file formatting..."
-	@nph --check nim/bincode.nim && \
+	@nph --check nim/nim_bincode.nim && \
 	 nph --check nim/examples/example.nim && \
 	 nph --check nim/examples/struct_example.nim && \
 	 nph --check nim/tests/test_bincode.nim && \
