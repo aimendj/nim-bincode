@@ -136,4 +136,85 @@ suite "Native bincode string serialization":
     let deserialized = deserializeString(serialized)
     check deserialized == original
 
+suite "Native bincode integer serialization":
+  test "serialize and deserialize int32 zero":
+    let original: int32 = 0
+    let serialized = serializeInt32(original)
+    check original == deserializeInt32(serialized)
+
+  test "serialize and deserialize int32 positive":
+    let original: int32 = 42
+    let serialized = serializeInt32(original)
+    check original == deserializeInt32(serialized)
+
+  test "serialize and deserialize int32 negative":
+    let original: int32 = -42
+    let serialized = serializeInt32(original)
+    check original == deserializeInt32(serialized)
+
+  test "serialize and deserialize int32 max":
+    let original: int32 = int32.high
+    let serialized = serializeInt32(original)
+    check original == deserializeInt32(serialized)
+
+  test "serialize and deserialize int32 min":
+    let original: int32 = int32.low
+    let serialized = serializeInt32(original)
+    check original == deserializeInt32(serialized)
+
+  test "deserialize int32 with insufficient data raises":
+    let insufficient = @[byte(1), 2, 3]
+    expect BincodeError:
+      discard deserializeInt32(insufficient)
+
+  test "serialize and deserialize uint32 zero":
+    let original: uint32 = 0'u32
+    let serialized = serializeUint32(original)
+    check original == deserializeUint32(serialized)
+
+  test "serialize and deserialize uint32 positive":
+    let original: uint32 = 42'u32
+    let serialized = serializeUint32(original)
+    check original == deserializeUint32(serialized)
+
+  test "serialize and deserialize uint32 max":
+    let original: uint32 = uint32.high
+    let serialized = serializeUint32(original)
+    check original == deserializeUint32(serialized)
+
+  test "deserialize uint32 with insufficient data raises":
+    let insufficient = @[byte(1), 2, 3]
+    expect BincodeError:
+      discard deserializeUint32(insufficient)
+
+  test "serialize and deserialize int64 zero":
+    let original: int64 = 0
+    let serialized = serializeInt64(original)
+    check original == deserializeInt64(serialized)
+
+  test "serialize and deserialize int64 positive":
+    let original: int64 = 42
+    let serialized = serializeInt64(original)
+    check original == deserializeInt64(serialized)
+
+  test "serialize and deserialize int64 negative":
+    let original: int64 = -42
+    let serialized = serializeInt64(original)
+    check original == deserializeInt64(serialized)
+
+  test "serialize and deserialize int64 max":
+    let original: int64 = int64.high
+    let serialized = serializeInt64(original)
+    check original == deserializeInt64(serialized)
+
+  test "serialize and deserialize int64 min":
+    let original: int64 = int64.low
+    let serialized = serializeInt64(original)
+    check original == deserializeInt64(serialized)
+
+  test "deserialize int64 with insufficient data raises":
+    let insufficient = @[byte(1), 2, 3, 4, 5, 6, 7]
+    expect BincodeError:
+      discard deserializeInt64(insufficient)
+
 {.pop.}
