@@ -2,11 +2,14 @@
 
 import stew/endians2
 
-type BincodeError* = object of CatchableError
-  ## Exception raised when bincode operations fail
+type
+  BincodeError* = object of CatchableError
+    ## Exception raised when bincode operations fail
 
 const BINCODE_SIZE_LIMIT* = 65536'u64
 const LENGTH_PREFIX_SIZE* = 8
+const INT32_SIZE* = 4
+const INT64_SIZE* = 8
 
 proc checkSizeLimit*(size: uint64) {.raises: [BincodeError].} =
   ## Check if size exceeds the 64 KiB limit.
@@ -127,5 +130,69 @@ proc deserializeString*(data: openArray[byte]): string {.raises: [
 
   result = newString(bytes.len)
   copyMem(result[0].addr, bytes[0].addr, bytes.len)
+
+proc serializeInt32*(value: int32): seq[byte] {.raises: [BincodeError].} =
+  ## Serialize an int32 to bincode format.
+  ##
+  ## Wraps the int32 bytes in Vec<u8> format (8-byte length prefix + 4-byte data).
+  ## Format: [8-byte u64 length (little-endian)] + [4-byte int32 (little-endian, two's complement)]
+
+  let bytes = toBytesLE(value.uint32)
+  result = serialize(@[bytes[0], bytes[1], bytes[2], bytes[3]])
+
+proc deserializeInt32*(data: openArray[byte]): int32 {.raises: [
+    BincodeError].} =
+  ## Deserialize bincode-encoded data to an int32.
+  ##
+  ## Expects Vec<u8> format (8-byte length prefix + 4-byte data).
+  ## Raises `BincodeError` if deserialized data is insufficient (< 4 bytes).
+
+  let bytes = deserialize(data)
+  if bytes.len < INT32_SIZE:
+    raise newException(BincodeError, "Cannot deserialize int32: insufficient data")
+  result = cast[int32](fromBytesLE(uint32, bytes))
+
+proc serializeUint32*(value: uint32): seq[byte] {.raises: [BincodeError].} =
+  ## Serialize a uint32 to bincode format.
+  ##
+  ## Wraps the uint32 bytes in Vec<u8> format (8-byte length prefix + 4-byte data).
+  ## Format: [8-byte u64 length (little-endian)] + [4-byte uint32 (little-endian)]
+
+  let bytes = toBytesLE(value)
+  result = serialize(@[bytes[0], bytes[1], bytes[2], bytes[3]])
+
+proc deserializeUint32*(data: openArray[byte]): uint32 {.raises: [
+    BincodeError].} =
+  ## Deserialize bincode-encoded data to a uint32.
+  ##
+  ## Expects Vec<u8> format (8-byte length prefix + 4-byte data).
+  ## Raises `BincodeError` if deserialized data is insufficient (< 4 bytes).
+
+  let bytes = deserialize(data)
+  if bytes.len < INT32_SIZE:
+    raise newException(BincodeError, "Cannot deserialize uint32: insufficient data")
+  result = fromBytesLE(uint32, bytes)
+
+proc serializeInt64*(value: int64): seq[byte] {.raises: [BincodeError].} =
+  ## Serialize an int64 to bincode format.
+  ##
+  ## Wraps the int64 bytes in Vec<u8> format (8-byte length prefix + 8-byte data).
+  ## Format: [8-byte u64 length (little-endian)] + [8-byte int64 (little-endian, two's complement)]
+
+  let bytes = toBytesLE(value.uint64)
+  result = serialize(@[bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[
+      5], bytes[6], bytes[7]])
+
+proc deserializeInt64*(data: openArray[byte]): int64 {.raises: [
+    BincodeError].} =
+  ## Deserialize bincode-encoded data to an int64.
+  ##
+  ## Expects Vec<u8> format (8-byte length prefix + 8-byte data).
+  ## Raises `BincodeError` if deserialized data is insufficient (< 8 bytes).
+
+  let bytes = deserialize(data)
+  if bytes.len < INT64_SIZE:
+    raise newException(BincodeError, "Cannot deserialize int64: insufficient data")
+  result = cast[int64](fromBytesLE(uint64, bytes))
 
 {.pop.}
