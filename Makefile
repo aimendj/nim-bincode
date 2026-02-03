@@ -69,6 +69,7 @@ test-rust: rust-build
 test-nim: install-deps rust-build
 	@echo "Running Nim tests..."
 	nim c -r $(NIM_TESTS)/test_bincode.nim
+	nim c -r $(NIM_TESTS)/test_native_bincode.nim
 
 # Format all Nim files
 format:
