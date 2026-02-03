@@ -85,4 +85,55 @@ suite "Native bincode core serialization":
     expect BincodeError:
       discard deserialize(invalid)
 
+suite "Native bincode string serialization":
+  test "serialize empty string":
+    let empty = ""
+    let serialized = serializeString(empty)
+    check serialized.len == 8
+    check serialized == @[byte(0), 0, 0, 0, 0, 0, 0, 0]
+
+  test "deserialize empty string":
+    let empty_encoded = @[byte(0), 0, 0, 0, 0, 0, 0, 0]
+    let deserialized = deserializeString(empty_encoded)
+    check deserialized == ""
+
+  test "serialize and deserialize basic string":
+    let original = "Hello, World!"
+    let serialized = serializeString(original)
+    check serialized.len == 21 # 8 bytes length + 13 bytes UTF-8
+    check serialized[0..7] == @[byte(13), 0, 0, 0, 0, 0, 0, 0] # length prefix
+
+    let deserialized = deserializeString(serialized)
+    check deserialized == original
+
+  test "roundtrip string serialization":
+    let original = "Test string with various characters: !@#$%^&*()"
+    let serialized = serializeString(original)
+    let deserialized = deserializeString(serialized)
+    check deserialized == original
+
+  test "serialize and deserialize unicode string":
+    let original = "Test with émojis 🚀"
+    let serialized = serializeString(original)
+    let deserialized = deserializeString(serialized)
+    check deserialized == original
+
+  test "serialize and deserialize string with null bytes":
+    let original = "Null\0byte"
+    let serialized = serializeString(original)
+    let deserialized = deserializeString(serialized)
+    check deserialized == original
+
+  test "serialize and deserialize multiline string":
+    let original = "Line 1\nLine 2\nLine 3"
+    let serialized = serializeString(original)
+    let deserialized = deserializeString(serialized)
+    check deserialized == original
+
+  test "serialize string with various unicode characters":
+    let original = "Unicode: 中文 العربية русский 🎉 émoji"
+    let serialized = serializeString(original)
+    let deserialized = deserializeString(serialized)
+    check deserialized == original
+
 {.pop.}
