@@ -1,4 +1,4 @@
-{.push gcsafe.}
+{.push raises: [], gcsafe.}
 
 import unittest
 import strutils

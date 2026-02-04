@@ -25,7 +25,8 @@ proc bincode_free_buffer*(
   buffer: ptr uint8, len: csize_t
 ) {.importc: "bincode_free_buffer".}
 
-proc bincode_get_serialized_length*(data: ptr uint8, len: csize_t): csize_t {.importc.}
+proc bincode_get_serialized_length*(data: ptr uint8,
+    len: csize_t): csize_t {.importc.}
 
 proc serialize*(data: openArray[byte]): seq[byte] {.raises: [BincodeError].} =
   var outLen: csize_t = 0
@@ -74,7 +75,8 @@ proc serializeString*(s: string): seq[byte] {.raises: [BincodeError].} =
     bytes[i] = byte(s[i])
   serialize(bytes)
 
-proc deserializeString*(data: openArray[byte]): string {.raises: [BincodeError].} =
+proc deserializeString*(data: openArray[byte]): string {.raises: [
+    BincodeError].} =
   let bytes = deserialize(data)
   if bytes.len == 0:
     return ""
@@ -85,7 +87,8 @@ proc deserializeString*(data: openArray[byte]): string {.raises: [BincodeError].
 proc serializeInt32*(value: int32): seq[byte] {.raises: [BincodeError].} =
   serialize(@(toBytesLE(value.uint32)))
 
-proc deserializeInt32*(data: openArray[byte]): int32 {.raises: [BincodeError].} =
+proc deserializeInt32*(data: openArray[byte]): int32 {.raises: [
+    BincodeError].} =
   let bytes = deserialize(data)
   if bytes.len < 4:
     raise newException(BincodeError, "Cannot deserialize int32: insufficient data")
@@ -94,7 +97,8 @@ proc deserializeInt32*(data: openArray[byte]): int32 {.raises: [BincodeError].} 
 proc serializeUint32*(value: uint32): seq[byte] {.raises: [BincodeError].} =
   serialize(@(toBytesLE(value)))
 
-proc deserializeUint32*(data: openArray[byte]): uint32 {.raises: [BincodeError].} =
+proc deserializeUint32*(data: openArray[byte]): uint32 {.raises: [
+    BincodeError].} =
   let bytes = deserialize(data)
   if bytes.len < 4:
     raise newException(BincodeError, "Cannot deserialize uint32: insufficient data")
@@ -103,7 +107,8 @@ proc deserializeUint32*(data: openArray[byte]): uint32 {.raises: [BincodeError].
 proc serializeInt64*(value: int64): seq[byte] {.raises: [BincodeError].} =
   serialize(@(toBytesLE(value.uint64)))
 
-proc deserializeInt64*(data: openArray[byte]): int64 {.raises: [BincodeError].} =
+proc deserializeInt64*(data: openArray[byte]): int64 {.raises: [
+    BincodeError].} =
   let bytes = deserialize(data)
   if bytes.len < 8:
     raise newException(BincodeError, "Cannot deserialize int64: insufficient data")

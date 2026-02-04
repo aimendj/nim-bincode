@@ -19,7 +19,7 @@ type
 
 const BINCODE_SIZE_LIMIT* = 65536'u64
 
-proc standard*(): BincodeConfig {.raises: [].} =
+func standard*(): BincodeConfig {.raises: [].} =
   ## Create a standard bincode configuration with default settings:
   ## - Little-endian byte order
   ## - Fixed integer encoding (uses natural size: 4 bytes for int32/uint32, 8 bytes for int64)
@@ -28,42 +28,47 @@ proc standard*(): BincodeConfig {.raises: [].} =
   ## This matches the current default behavior for backward compatibility.
   ##
   ## Note: intSize = 0 means fixed encoding with natural size.
-  result = BincodeConfig(
+  return BincodeConfig(
     byteOrder: LittleEndian,
     intSize: 0, ## 0 means fixed encoding with natural size
     sizeLimit: BINCODE_SIZE_LIMIT
   )
 
-proc withLittleEndian*(config: BincodeConfig): BincodeConfig {.raises: [].} =
+func withLittleEndian*(config: BincodeConfig): BincodeConfig {.raises: [].} =
   ## Set byte order to little-endian.
-  result = config
-  result.byteOrder = LittleEndian
+  var output = config
+  output.byteOrder = LittleEndian
+  return output
 
-proc withBigEndian*(config: BincodeConfig): BincodeConfig {.raises: [].} =
+func withBigEndian*(config: BincodeConfig): BincodeConfig {.raises: [].} =
   ## Set byte order to big-endian.
-  result = config
-  result.byteOrder = BigEndian
+  var output = config
+  output.byteOrder = BigEndian
+  return output
 
-proc withFixedIntEncoding*(config: BincodeConfig,
+func withFixedIntEncoding*(config: BincodeConfig,
     size: int = 0): BincodeConfig {.raises: [].} =
   ## Set integer encoding to fixed-size.
   ##
   ## `size` specifies the number of bytes to use (1, 2, 4, or 8).
   ## If `size` is 0 (default), uses the natural size of the integer type
   ## (4 bytes for int32/uint32, 8 bytes for int64/uint64).
-  result = config
-  result.intSize = size
+  var output = config
+  output.intSize = size
+  return output
 
-proc withVariableIntEncoding*(config: BincodeConfig): BincodeConfig {.raises: [].} =
+func withVariableIntEncoding*(config: BincodeConfig): BincodeConfig {.raises: [].} =
   ## Set integer encoding to variable-length (LEB128).
   ##
   ## This sets intSize to -1 to indicate variable encoding.
-  result = config
-  result.intSize = -1
+  var output = config
+  output.intSize = -1
+  return output
 
-proc withLimit*(config: BincodeConfig, limit: uint64): BincodeConfig {.raises: [].} =
+func withLimit*(config: BincodeConfig, limit: uint64): BincodeConfig {.raises: [].} =
   ## Set the maximum size limit for serialized data.
-  result = config
-  result.sizeLimit = limit
+  var output = config
+  output.sizeLimit = limit
+  return output
 
 {.pop.}

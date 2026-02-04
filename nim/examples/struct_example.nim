@@ -38,10 +38,11 @@ proc personToBytes(p: Person): seq[byte] =
   for i in 0 ..< p.email.len:
     emailBytes[i] = byte(p.email[i])
 
-  result = nameLenBytes & nameBytes & ageBytes & emailLenBytes & emailBytes
+  return nameLenBytes & nameBytes & ageBytes & emailLenBytes & emailBytes
 
-proc bytesToPerson(data: seq[byte]): Person =
+proc bytesToPerson(data: openArray[byte]): Person =
   var offset = 0
+  var person: Person
 
   if data.len >= offset + 4:
     let nameLen =
@@ -50,13 +51,13 @@ proc bytesToPerson(data: seq[byte]): Person =
     offset += 4
 
     if data.len >= offset + int(nameLen):
-      result.name = newString(int(nameLen))
+      person.name = newString(int(nameLen))
       for i in 0 ..< int(nameLen):
-        result.name[i] = char(data[offset + i])
+        person.name[i] = char(data[offset + i])
       offset += int(nameLen)
 
   if data.len >= offset + 4:
-    result.age =
+    person.age =
       (data[offset].uint32) or (data[offset + 1].uint32 shl 8) or
       (data[offset + 2].uint32 shl 16) or (data[offset + 3].uint32 shl 24)
     offset += 4
@@ -68,9 +69,11 @@ proc bytesToPerson(data: seq[byte]): Person =
     offset += 4
 
     if data.len >= offset + int(emailLen):
-      result.email = newString(int(emailLen))
+      person.email = newString(int(emailLen))
       for i in 0 ..< int(emailLen):
-        result.email[i] = char(data[offset + i])
+        person.email[i] = char(data[offset + i])
+
+  return person
 
 proc main() {.raises: [BincodeError].} =
   echo "=== Struct Example (like Rust direct_example.rs) ===\n"
