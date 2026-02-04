@@ -43,7 +43,7 @@ install-deps:
 	@echo "Dependencies installed via git submodules"
 
 # Build Nim examples
-nim-build: install-deps rust-build
+nim-build: install-deps
 	@echo "Building Nim examples..."
 	@mkdir -p bin
 	nim c -d:release -o:bin/example $(NIM_EXAMPLES)/example.nim
@@ -66,27 +66,31 @@ test-rust: rust-build
 	cargo test
 
 # Run Nim tests
-test-nim: install-deps rust-build
+test-nim: install-deps
 	@echo "Running Nim tests..."
 	nim c -r $(NIM_TESTS)/test_bincode.nim
-	nim c -r $(NIM_TESTS)/test_native_bincode.nim
+	nim c -r $(NIM_TESTS)/test_bincode_config.nim
 
 # Format all Nim files
 format:
 	@echo "Formatting Nim files..."
 	nph nim/nim_bincode.nim
+	nph nim/bincode_config.nim
 	nph nim/examples/example.nim
 	nph nim/examples/struct_example.nim
 	nph nim/tests/test_bincode.nim
+	nph nim/tests/test_bincode_config.nim
 	@echo "Formatting complete."
 
 # Check if Nim files are formatted
 format-check:
 	@echo "Checking Nim file formatting..."
 	@nph --check nim/nim_bincode.nim && \
+	 nph --check nim/bincode_config.nim && \
 	 nph --check nim/examples/example.nim && \
 	 nph --check nim/examples/struct_example.nim && \
 	 nph --check nim/tests/test_bincode.nim && \
+	 nph --check nim/tests/test_bincode_config.nim && \
 	 echo "All files are properly formatted." || \
 	 (echo "Some files are not formatted. Run 'make format' to fix." && exit 1)
 
@@ -96,7 +100,7 @@ clean:
 	cargo clean
 	rm -rf bin/
 	rm -f nim/examples/example nim/examples/struct_example
-	rm -f nim/tests/test_bincode
+	rm -f nim/tests/test_bincode nim/tests/test_bincode_config
 	rm -rf nimcache/
 	rm -f bincode_wrapper.h
 	@echo "Clean complete."

@@ -2,7 +2,7 @@
 
 import unittest
 import ../bincode_config
-import ../native_bincode
+import ../nim_bincode
 
 suite "Bincode Config":
   test "standard config has correct defaults":

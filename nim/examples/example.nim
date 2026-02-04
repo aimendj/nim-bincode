@@ -1,6 +1,7 @@
-{.push raises: [], gcsafe.}
+{.push raises: [BincodeError], gcsafe.}
 
 import ../nim_bincode
+
 let original = @[byte(1), 2, 3, 4, 5]
 echo "Original bytes: ", original
 
@@ -11,6 +12,7 @@ echo "Serialized bytes: ", serialized
 let deserialized = deserialize(serialized)
 echo "Deserialized bytes: ", deserialized
 echo "Match: ", original == deserialized
+
 let text = "Hello, bincode!"
 echo "\nOriginal string: ", text
 
