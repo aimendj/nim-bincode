@@ -1,21 +1,23 @@
-{.push raises: [BincodeError], gcsafe.}
+{.push raises: [], gcsafe.}
 
 import stew/endians2
+import stew/leb128
+import bincode_config
 
 type
   BincodeError* = object of CatchableError
     ## Exception raised when bincode operations fail
 
-const BINCODE_SIZE_LIMIT* = 65536'u64
 const LENGTH_PREFIX_SIZE* = 8
 const INT32_SIZE* = 4
 const INT64_SIZE* = 8
 
-proc checkSizeLimit*(size: uint64) {.raises: [BincodeError].} =
-  ## Check if size exceeds the 64 KiB limit.
+proc checkSizeLimit*(size: uint64, limit: uint64 = BINCODE_SIZE_LIMIT) {.raises: [
+    BincodeError].} =
+  ## Check if size exceeds the specified limit.
   ## Raises `BincodeError` if size exceeds limit.
-  if size > BINCODE_SIZE_LIMIT:
-    raise newException(BincodeError, "Data exceeds 64 KiB limit")
+  if size > limit:
+    raise newException(BincodeError, "Data exceeds size limit")
 
 proc checkMinimumSize*(dataLen: int, required: int = LENGTH_PREFIX_SIZE) {.raises: [
     BincodeError].} =
@@ -24,11 +26,12 @@ proc checkMinimumSize*(dataLen: int, required: int = LENGTH_PREFIX_SIZE) {.raise
   if dataLen < required:
     raise newException(BincodeError, "Insufficient data for length prefix")
 
-proc checkLengthLimit*(length: uint64) {.raises: [BincodeError].} =
-  ## Check if decoded length exceeds the 64 KiB limit.
+proc checkLengthLimit*(length: uint64, limit: uint64 = BINCODE_SIZE_LIMIT) {.raises: [
+    BincodeError].} =
+  ## Check if decoded length exceeds the specified limit.
   ## Raises `BincodeError` if length exceeds limit.
-  if length > BINCODE_SIZE_LIMIT:
-    raise newException(BincodeError, "Length exceeds 64 KiB limit")
+  if length > limit:
+    raise newException(BincodeError, "Length exceeds size limit")
 
 proc checkSufficientData*(dataLen: int, length: int) {.raises: [
     BincodeError].} =
@@ -44,155 +47,347 @@ proc checkNoTrailingBytes*(dataLen: int, length: int) {.raises: [
   if dataLen != LENGTH_PREFIX_SIZE + length:
     raise newException(BincodeError, "Trailing bytes detected")
 
-proc serialize*(data: openArray[byte]): seq[byte] {.raises: [BincodeError].} =
+func zigzagEncode*(value: int64): uint64 {.raises: [].} =
+  ## Encode a signed integer using zigzag encoding for LEB128.
+  ## Zigzag encoding maps signed integers to unsigned integers:
+  ## 0 -> 0, -1 -> 1, 1 -> 2, -2 -> 3, 2 -> 4, etc.
+  if value >= 0: (value.uint64 shl 1) else: ((not value.uint64) shl 1) or 1
+
+func zigzagDecode*(value: uint64): int64 {.raises: [].} =
+  ## Decode a zigzag-encoded unsigned integer back to a signed integer.
+  if (value and 1) == 0: (value shr 1).int64 else: not((value shr 1).int64)
+
+func encodeLength*(length: uint64, config: BincodeConfig): seq[byte] {.raises: [].} =
+  ## Encode a length value according to the config's integer encoding.
+  if config.intSize >= 0:
+    case config.byteOrder
+    of LittleEndian:
+      let bytes = toBytesLE(length)
+      return @[bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5],
+          bytes[6], bytes[7]]
+    of BigEndian:
+      let bytes = toBytesBE(length)
+      return @[bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5],
+          bytes[6], bytes[7]]
+  else:
+    let buf = toBytes(length, Leb128)
+    return @buf
+
+proc decodeLength*(data: openArray[byte], config: BincodeConfig): (uint64, int) {.
+    raises: [BincodeError].} =
+  ## Decode a length value according to the config's integer encoding.
+  ## Returns (length, bytes_consumed).
+  if config.intSize >= 0:
+    if data.len < LENGTH_PREFIX_SIZE:
+      raise newException(BincodeError, "Insufficient data for length prefix")
+    var lengthBytes: array[LENGTH_PREFIX_SIZE, byte]
+    for i in 0..<LENGTH_PREFIX_SIZE:
+      lengthBytes[i] = data[i]
+    let length = case config.byteOrder
+    of LittleEndian:
+      fromBytesLE(uint64, lengthBytes)
+    of BigEndian:
+      fromBytesBE(uint64, lengthBytes)
+    return (length, LENGTH_PREFIX_SIZE)
+  else:
+    let decoded = fromBytes(uint64, data, Leb128)
+    if decoded.len <= 0:
+      raise newException(BincodeError, "Failed to decode variable-length integer")
+    return (decoded.val, decoded.len.int)
+
+proc serialize*(data: openArray[byte], config: BincodeConfig = standard()): seq[
+    byte] {.raises: [BincodeError].} =
   ## Serialize a byte sequence to bincode format.
   ##
-  ## Format: [8-byte u64 length (little-endian)] + [data bytes]
+  ## Format depends on config:
+  ## - Fixed encoding: [8-byte u64 length] + [data bytes]
+  ## - Variable encoding: [LEB128 length] + [data bytes]
   ##
-  ## Raises `BincodeError` if data exceeds 64 KiB limit.
+  ## Byte order (little-endian/big-endian) applies to fixed encoding.
   ##
-  ## Empty sequences serialize to 8 zero bytes (length = 0).
+  ## Raises `BincodeError` if data exceeds the configured size limit.
+  ##
+  ## Empty sequences serialize to a zero-length prefix + no data bytes.
 
-  checkSizeLimit(data.len.uint64)
+  checkSizeLimit(data.len.uint64, config.sizeLimit)
 
-  let lengthBytes = toBytesLE(data.len.uint64)
+  let lengthPrefix = encodeLength(data.len.uint64, config)
 
-  result = newSeq[byte](LENGTH_PREFIX_SIZE + data.len)
-  copyMem(result[0].addr, lengthBytes[0].addr, LENGTH_PREFIX_SIZE)
+  var output = newSeq[byte](lengthPrefix.len + data.len)
+  copyMem(output[0].addr, lengthPrefix[0].addr, lengthPrefix.len)
   if data.len > 0:
-    copyMem(result[LENGTH_PREFIX_SIZE].addr, data[0].unsafeAddr, data.len)
+    copyMem(output[lengthPrefix.len].addr, data[0].unsafeAddr, data.len)
+  return output
 
-proc deserialize*(data: openArray[byte]): seq[byte] {.raises: [BincodeError].} =
+proc deserialize*(data: openArray[byte], config: BincodeConfig = standard(
+    )): seq[byte] {.raises: [BincodeError].} =
   ## Deserialize bincode-encoded data to a byte sequence.
   ##
-  ## Format: [8-byte u64 length (little-endian)] + [data bytes]
+  ## Format depends on config:
+  ## - Fixed encoding: [8-byte u64 length] + [data bytes]
+  ## - Variable encoding: [LEB128 length] + [data bytes]
+  ##
+  ## Byte order (little-endian/big-endian) applies to fixed encoding.
   ##
   ## Raises `BincodeError` if:
-  ## - Data is insufficient for length prefix (< 8 bytes)
-  ## - Length exceeds 64 KiB limit
+  ## - Data is insufficient for length prefix
+  ## - Length exceeds the configured size limit
   ## - Insufficient data for content
   ## - Trailing bytes detected (all input bytes must be consumed)
 
-  checkMinimumSize(data.len)
+  if data.len == 0:
+    raise newException(BincodeError, "Insufficient data for length prefix")
 
-  var lengthBytes: array[LENGTH_PREFIX_SIZE, byte]
-  for i in 0..<LENGTH_PREFIX_SIZE:
-    lengthBytes[i] = data[i]
-  let length = fromBytesLE(uint64, lengthBytes).int
+  let (lengthValue, prefixSize) = decodeLength(data, config)
+  let length = lengthValue.int
 
-  checkLengthLimit(length.uint64)
-  checkSufficientData(data.len, length)
+  checkLengthLimit(lengthValue, config.sizeLimit)
 
-  result = newSeq[byte](length)
+  if data.len < prefixSize + length:
+    raise newException(BincodeError, "Insufficient data for content")
+
+  var output = newSeq[byte](length)
   if length > 0:
-    copyMem(result[0].addr, data[LENGTH_PREFIX_SIZE].unsafeAddr, length)
+    copyMem(output[0].addr, data[prefixSize].unsafeAddr, length)
 
-  checkNoTrailingBytes(data.len, length)
+  if data.len != prefixSize + length:
+    raise newException(BincodeError, "Trailing bytes detected")
 
-proc serializeString*(s: string): seq[byte] {.raises: [BincodeError].} =
+  return output
+
+proc serializeString*(s: string, config: BincodeConfig = standard()): seq[
+    byte] {.raises: [BincodeError].} =
   ## Serialize a string to bincode format.
   ##
-  ## Format: [8-byte u64 length (little-endian)] + [UTF-8 bytes]
+  ## Format depends on config:
+  ## - Fixed encoding: [8-byte u64 length] + [UTF-8 bytes]
+  ## - Variable encoding: [LEB128 length] + [UTF-8 bytes]
   ##
   ## The length is the UTF-8 byte count, not character count.
   ## Unicode characters are handled correctly (multi-byte UTF-8 sequences).
   ##
-  ## Raises `BincodeError` if UTF-8 byte length exceeds 64 KiB limit.
+  ## Raises `BincodeError` if UTF-8 byte length exceeds the configured size limit.
   ##
-  ## Empty strings serialize to 8 zero bytes (length = 0).
+  ## Empty strings serialize to a zero-length prefix + no data bytes.
 
   var utf8Bytes = newSeq[byte](s.len)
   if s.len > 0:
     copyMem(utf8Bytes[0].addr, s[0].unsafeAddr, s.len)
 
-  result = serialize(utf8Bytes)
+  return serialize(utf8Bytes, config)
 
-proc deserializeString*(data: openArray[byte]): string {.raises: [
-    BincodeError].} =
+proc deserializeString*(data: openArray[byte], config: BincodeConfig = standard()): string {.
+    raises: [BincodeError].} =
   ## Deserialize bincode-encoded data to a string.
   ##
-  ## Format: [8-byte u64 length (little-endian)] + [UTF-8 bytes]
+  ## Format depends on config:
+  ## - Fixed encoding: [8-byte u64 length] + [UTF-8 bytes]
+  ## - Variable encoding: [LEB128 length] + [UTF-8 bytes]
   ##
   ## The length is the UTF-8 byte count, not character count.
   ## Unicode characters are handled correctly (multi-byte UTF-8 sequences).
   ##
   ## Raises `BincodeError` if:
-  ## - Data is insufficient for length prefix (< 8 bytes)
-  ## - Length exceeds 64 KiB limit
+  ## - Data is insufficient for length prefix
+  ## - Length exceeds the configured size limit
   ## - Insufficient data for content
   ## - Trailing bytes detected
   ## - Invalid UTF-8 encoding
 
-  let bytes = deserialize(data)
+  let bytes = deserialize(data, config)
 
   if bytes.len == 0:
     return ""
 
-  result = newString(bytes.len)
-  copyMem(result[0].addr, bytes[0].addr, bytes.len)
+  var output = newString(bytes.len)
+  copyMem(output[0].addr, bytes[0].addr, bytes.len)
+  return output
 
-proc serializeInt32*(value: int32): seq[byte] {.raises: [BincodeError].} =
+proc serializeInt32*(value: int32, config: BincodeConfig = standard()): seq[byte] {.
+    raises: [BincodeError].} =
   ## Serialize an int32 to bincode format.
   ##
-  ## Wraps the int32 bytes in Vec<u8> format (8-byte length prefix + 4-byte data).
-  ## Format: [8-byte u64 length (little-endian)] + [4-byte int32 (little-endian, two's complement)]
+  ## Wraps the int32 bytes in Vec<u8> format.
+  ## Format depends on config:
+  ## - Fixed encoding: [length prefix] + [N-byte int32] where N is config.intSize (or 4 if 0)
+  ## - Variable encoding: [length prefix] + [LEB128 int32]
+  ##
+  ## Byte order applies to fixed encoding.
 
-  let bytes = toBytesLE(value.uint32)
-  result = serialize(@[bytes[0], bytes[1], bytes[2], bytes[3]])
+  var intBytes: seq[byte]
+  if config.intSize >= 0:
+    let size = if config.intSize == 0: INT32_SIZE else: config.intSize
+    if size notin [1, 2, 4, 8]:
+      raise newException(BincodeError, "Invalid fixedIntSize: must be 1, 2, 4, or 8")
+    let bytes = case config.byteOrder
+    of LittleEndian:
+      toBytesLE(value.int64.uint64)
+    of BigEndian:
+      toBytesBE(value.int64.uint64)
+    intBytes = newSeq[byte](size)
+    case config.byteOrder
+    of LittleEndian:
+      copyMem(intBytes[0].addr, bytes[0].addr, size)
+    of BigEndian:
+      copyMem(intBytes[0].addr, bytes[8 - size].addr, size)
+  else:
+    let zigzag = zigzagEncode(value.int64)
+    let buf = toBytes(zigzag, Leb128)
+    intBytes = @buf
+  return serialize(intBytes, config)
 
-proc deserializeInt32*(data: openArray[byte]): int32 {.raises: [
-    BincodeError].} =
+proc deserializeInt32*(data: openArray[byte], config: BincodeConfig = standard()): int32 {.
+    raises: [BincodeError].} =
   ## Deserialize bincode-encoded data to an int32.
   ##
-  ## Expects Vec<u8> format (8-byte length prefix + 4-byte data).
-  ## Raises `BincodeError` if deserialized data is insufficient (< 4 bytes).
+  ## Expects Vec<u8> format.
+  ## Raises `BincodeError` if deserialized data is insufficient.
 
-  let bytes = deserialize(data)
-  if bytes.len < INT32_SIZE:
-    raise newException(BincodeError, "Cannot deserialize int32: insufficient data")
-  result = cast[int32](fromBytesLE(uint32, bytes))
+  let bytes = deserialize(data, config)
+  if config.intSize >= 0:
+    let size = if config.intSize == 0: INT32_SIZE else: config.intSize
+    if bytes.len < size:
+      raise newException(BincodeError, "Cannot deserialize int32: insufficient data")
+    var paddedBytes: array[8, byte]
+    case config.byteOrder
+    of LittleEndian:
+      copyMem(paddedBytes[0].addr, bytes[0].addr, size)
+      let uintValue = fromBytesLE(uint64, paddedBytes)
+      return cast[int32](uintValue)
+    of BigEndian:
+      copyMem(paddedBytes[8 - size].addr, bytes[0].addr, size)
+      let uintValue = fromBytesBE(uint64, paddedBytes)
+      return cast[int32](uintValue)
+  else:
+    let decoded = fromBytes(uint64, bytes, Leb128)
+    if decoded.len <= 0:
+      raise newException(BincodeError, "Cannot deserialize int32: invalid encoding")
+    let zigzagDecoded = zigzagDecode(decoded.val)
+    if zigzagDecoded < int32.low.int64 or zigzagDecoded > int32.high.int64:
+      raise newException(BincodeError, "Cannot deserialize int32: value out of range")
+    return zigzagDecoded.int32
 
-proc serializeUint32*(value: uint32): seq[byte] {.raises: [BincodeError].} =
+proc serializeUint32*(value: uint32, config: BincodeConfig = standard()): seq[byte] {.
+    raises: [BincodeError].} =
   ## Serialize a uint32 to bincode format.
   ##
-  ## Wraps the uint32 bytes in Vec<u8> format (8-byte length prefix + 4-byte data).
-  ## Format: [8-byte u64 length (little-endian)] + [4-byte uint32 (little-endian)]
+  ## Wraps the uint32 bytes in Vec<u8> format.
+  ## Format depends on config:
+  ## - Fixed encoding: [length prefix] + [N-byte uint32] where N is config.fixedIntSize (or 4 if 0)
+  ## - Variable encoding: [length prefix] + [LEB128 uint32]
+  ##
+  ## Byte order applies to fixed encoding.
 
-  let bytes = toBytesLE(value)
-  result = serialize(@[bytes[0], bytes[1], bytes[2], bytes[3]])
+  var intBytes: seq[byte]
+  if config.intSize >= 0:
+    let size = if config.intSize == 0: INT32_SIZE else: config.intSize
+    if size notin [1, 2, 4, 8]:
+      raise newException(BincodeError, "Invalid fixedIntSize: must be 1, 2, 4, or 8")
+    let bytes = case config.byteOrder
+    of LittleEndian:
+      toBytesLE(value.uint64)
+    of BigEndian:
+      toBytesBE(value.uint64)
+    intBytes = newSeq[byte](size)
+    case config.byteOrder
+    of LittleEndian:
+      copyMem(intBytes[0].addr, bytes[0].addr, size)
+    of BigEndian:
+      copyMem(intBytes[0].addr, bytes[8 - size].addr, size)
+  else:
+    let buf = toBytes(value.uint64, Leb128)
+    intBytes = @buf
+  return serialize(intBytes, config)
 
-proc deserializeUint32*(data: openArray[byte]): uint32 {.raises: [
-    BincodeError].} =
+proc deserializeUint32*(data: openArray[byte], config: BincodeConfig = standard()): uint32 {.
+    raises: [BincodeError].} =
   ## Deserialize bincode-encoded data to a uint32.
   ##
-  ## Expects Vec<u8> format (8-byte length prefix + 4-byte data).
-  ## Raises `BincodeError` if deserialized data is insufficient (< 4 bytes).
+  ## Expects Vec<u8> format.
+  ## Raises `BincodeError` if deserialized data is insufficient.
 
-  let bytes = deserialize(data)
-  if bytes.len < INT32_SIZE:
-    raise newException(BincodeError, "Cannot deserialize uint32: insufficient data")
-  result = fromBytesLE(uint32, bytes)
+  let bytes = deserialize(data, config)
+  if config.intSize >= 0:
+    let size = if config.intSize == 0: INT32_SIZE else: config.intSize
+    if bytes.len < size:
+      raise newException(BincodeError, "Cannot deserialize uint32: insufficient data")
+    var paddedBytes: array[8, byte]
+    case config.byteOrder
+    of LittleEndian:
+      copyMem(paddedBytes[0].addr, bytes[0].addr, size)
+      let uintValue = fromBytesLE(uint64, paddedBytes)
+      return uintValue.uint32
+    of BigEndian:
+      copyMem(paddedBytes[8 - size].addr, bytes[0].addr, size)
+      let uintValue = fromBytesBE(uint64, paddedBytes)
+      return uintValue.uint32
+  else:
+    let decoded = fromBytes(uint64, bytes, Leb128)
+    if decoded.len <= 0:
+      raise newException(BincodeError, "Cannot deserialize uint32: invalid encoding")
+    if decoded.val > uint32.high.uint64:
+      raise newException(BincodeError, "Cannot deserialize uint32: value out of range")
+    return decoded.val.uint32
 
-proc serializeInt64*(value: int64): seq[byte] {.raises: [BincodeError].} =
+proc serializeInt64*(value: int64, config: BincodeConfig = standard()): seq[byte] {.
+    raises: [BincodeError].} =
   ## Serialize an int64 to bincode format.
   ##
-  ## Wraps the int64 bytes in Vec<u8> format (8-byte length prefix + 8-byte data).
-  ## Format: [8-byte u64 length (little-endian)] + [8-byte int64 (little-endian, two's complement)]
+  ## Wraps the int64 bytes in Vec<u8> format.
+  ## Format depends on config:
+  ## - Fixed encoding: [length prefix] + [N-byte int64] where N is config.fixedIntSize (or 8 if 0)
+  ## - Variable encoding: [length prefix] + [LEB128 int64]
+  ##
+  ## Byte order applies to fixed encoding.
 
-  let bytes = toBytesLE(value.uint64)
-  result = serialize(@[bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[
-      5], bytes[6], bytes[7]])
+  var intBytes: seq[byte]
+  if config.intSize >= 0:
+    let size = if config.intSize == 0: INT64_SIZE else: config.intSize
+    if size notin [1, 2, 4, 8]:
+      raise newException(BincodeError, "Invalid fixedIntSize: must be 1, 2, 4, or 8")
+    let bytes = case config.byteOrder
+    of LittleEndian:
+      toBytesLE(value.uint64)
+    of BigEndian:
+      toBytesBE(value.uint64)
+    intBytes = newSeq[byte](size)
+    case config.byteOrder
+    of LittleEndian:
+      copyMem(intBytes[0].addr, bytes[0].addr, size)
+    of BigEndian:
+      copyMem(intBytes[0].addr, bytes[8 - size].addr, size)
+  else:
+    let zigzag = zigzagEncode(value)
+    let buf = toBytes(zigzag, Leb128)
+    intBytes = @buf
+  return serialize(intBytes, config)
 
-proc deserializeInt64*(data: openArray[byte]): int64 {.raises: [
-    BincodeError].} =
+proc deserializeInt64*(data: openArray[byte], config: BincodeConfig = standard()): int64 {.
+    raises: [BincodeError].} =
   ## Deserialize bincode-encoded data to an int64.
   ##
-  ## Expects Vec<u8> format (8-byte length prefix + 8-byte data).
-  ## Raises `BincodeError` if deserialized data is insufficient (< 8 bytes).
+  ## Expects Vec<u8> format.
+  ## Raises `BincodeError` if deserialized data is insufficient.
 
-  let bytes = deserialize(data)
-  if bytes.len < INT64_SIZE:
-    raise newException(BincodeError, "Cannot deserialize int64: insufficient data")
-  result = cast[int64](fromBytesLE(uint64, bytes))
+  let bytes = deserialize(data, config)
+  if config.intSize >= 0:
+    let size = if config.intSize == 0: INT64_SIZE else: config.intSize
+    if bytes.len < size:
+      raise newException(BincodeError, "Cannot deserialize int64: insufficient data")
+    var paddedBytes: array[8, byte]
+    case config.byteOrder
+    of LittleEndian:
+      copyMem(paddedBytes[0].addr, bytes[0].addr, size)
+      let uintValue = fromBytesLE(uint64, paddedBytes)
+      return cast[int64](uintValue)
+    of BigEndian:
+      copyMem(paddedBytes[8 - size].addr, bytes[0].addr, size)
+      let uintValue = fromBytesBE(uint64, paddedBytes)
+      return cast[int64](uintValue)
+  else:
+    let decoded = fromBytes(uint64, bytes, Leb128)
+    if decoded.len <= 0:
+      raise newException(BincodeError, "Cannot deserialize int64: invalid encoding")
+    return zigzagDecode(decoded.val)
 
 {.pop.}
