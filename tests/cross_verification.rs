@@ -231,6 +231,41 @@ fn test_byte_for_byte_compatibility_variable() {
     }
 }
 
+#[test]
+fn test_marker_byte_prefixes_variable() {
+    // Verify that variable-length encoding uses correct marker bytes (0xfb, 0xfc, 0xfd)
+    let config = variable_config();
+    
+    // Test single byte encoding (< 251): length 250 should be single byte
+    let data250 = vec![0u8; 250];
+    let encoded250 = bincode::encode_to_vec(&data250, config)
+        .expect("Rust variable-length serialization failed");
+    assert_eq!(encoded250[0], 250u8, "Length 250 should use single byte encoding (no marker)");
+    assert_eq!(encoded250.len(), 251, "Length 250: 1 byte length + 250 data");
+    
+    // Test 0xfb marker (251-65535): length 251 should use 0xfb + u16 LE
+    let data251 = vec![0u8; 251];
+    let encoded251 = bincode::encode_to_vec(&data251, config)
+        .expect("Rust variable-length serialization failed");
+    assert_eq!(encoded251[0], 0xfb, "Length 251 should use 0xfb marker");
+    assert_eq!(encoded251.len(), 254, "Length 251: 3 bytes (0xfb + u16) + 251 data");
+    
+    // Test 0xfc marker (65536-4294967295): length 65536 should use 0xfc + u32 LE
+    let data65536 = vec![0u8; 65536];
+    let encoded65536 = bincode::encode_to_vec(&data65536, config)
+        .expect("Rust variable-length serialization failed");
+    assert_eq!(encoded65536[0], 0xfc, "Length 65536 should use 0xfc marker");
+    assert_eq!(encoded65536.len(), 65541, "Length 65536: 5 bytes (0xfc + u32) + 65536 data");
+    
+    // Test 0xfd marker (4294967296+): length 4294967296 should use 0xfd + u64 LE
+    // Note: This allocates 4GB, so it's slow but verifies the marker byte
+    let data4gb = vec![0u8; 4294967296];
+    let encoded4gb = bincode::encode_to_vec(&data4gb, config)
+        .expect("Rust variable-length serialization failed");
+    assert_eq!(encoded4gb[0], 0xfd, "Length 4294967296 should use 0xfd marker");
+    assert_eq!(encoded4gb.len(), 4294967305, "Length 4294967296: 9 bytes (0xfd + u64) + 4294967296 data");
+}
+
 // ============================================================================
 // Fixed 8-byte Encoding Tests
 // ============================================================================

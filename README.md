@@ -41,12 +41,12 @@ The project includes a Makefile for common tasks:
 - `make help` - Show all available targets
 - `make build` - Build Nim examples
 - `make examples` - Build and run Nim examples
-- `make test` - Run all unit tests (Rust + Nim)
-- `make test-rust` - Run Rust test harness only
-- `make test-nim` - Run Nim tests only
+- `make test` - Run all tests (Nim config + cross-verification + markers)
+- `make test-nim` - Run Nim config tests only
 - `make test-cross` - Run all Nim↔Rust cross-verification tests
 - `make test-cross-variable` - Run variable-length encoding cross-verification tests
 - `make test-cross-fixed8` - Run fixed 8-byte encoding cross-verification tests
+- `make test-markers` - Run marker byte prefix verification tests (0xfb, 0xfc, 0xfd)
 - `make install-deps` - Initialize git submodules (stew)
 - `make format` - Format all Nim files
 - `make format-check` - Check if Nim files are formatted
@@ -118,26 +118,29 @@ make build
 Run tests to verify the Nim implementation matches Rust bincode behavior:
 
 ```bash
-# Run all tests (Rust and Nim)
+# Run all tests (Nim config + cross-verification + markers)
 make test
 
-# Run only Rust tests
-make test-rust
-# or
-cargo test
-
-# Run only Nim tests
+# Run only Nim config tests
 make test-nim
 
-# Run Rust tests with output
-cargo test -- --nocapture
+# Run cross-verification tests (Nim ↔ Rust)
+make test-cross
+
+# Run marker byte prefix verification tests
+make test-markers
+
+# Run specific cross-verification test suites
+make test-cross-variable  # Variable-length encoding
+make test-cross-fixed8    # Fixed 8-byte encoding
 ```
 
 Tests verify:
 - Nim serialization/deserialization matches Rust bincode
 - Roundtrip serialization works correctly
+- Marker byte prefixes (0xfb, 0xfc, 0xfd) are correctly used in variable-length encoding
 - Various data types (strings, integers, structs, mixed data)
-- Edge cases (empty vectors, null pointers)
+- Edge cases (empty vectors, large arrays up to 4GB+)
 
 ## Formatting
 
