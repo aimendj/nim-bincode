@@ -10,25 +10,23 @@ const TestDataDir = "target/test_data"
 # Compile-time defines to control which test suites run
 when defined(testVariable):
   const RUN_VARIABLE_TESTS = true
-else:
+elif defined(testFixed8):
   const RUN_VARIABLE_TESTS = false
+else:
+  # Default: run all tests if no specific define is set
+  const RUN_VARIABLE_TESTS = true
 
 when defined(testFixed8):
   const RUN_FIXED8_TESTS = true
-else:
+elif defined(testVariable):
   const RUN_FIXED8_TESTS = false
-
-# Default: run all tests if no specific define is set
-when not defined(testVariable) and not defined(testFixed8):
-  const RUN_VARIABLE_TESTS = true
+else:
+  # Default: run all tests if no specific define is set
   const RUN_FIXED8_TESTS = true
 
 # ============================================================================
 # Test Case Definitions
 # ============================================================================
-
-type
-  TestCase = tuple[data: seq[byte], filename: string]
 
 # Test files for variable encoding deserialization
 const DeserializeTestFilesVariable {.used.}: array[14, string] = [
