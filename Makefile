@@ -1,4 +1,4 @@
-.PHONY: help build examples test test-nim test-cross test-cross-variable test-cross-fixed8 test-markers clean format format-check install-deps
+.PHONY: help build examples test test-nim test-format test-cross test-cross-variable test-cross-fixed8 test-markers clean format format-check install-deps
 
 # Variables
 NIM_SRC = nim
@@ -10,8 +10,9 @@ help:
 	@echo "Available targets:"
 	@echo "  make build          - Build Nim examples"
 	@echo "  make examples       - Build and run Nim examples"
-	@echo "  make test           - Run all tests (Nim config + cross-verification + markers)"
-	@echo "  make test-nim       - Run Nim config tests only"
+	@echo "  make test           - Run all tests (Nim + format + cross-verification + markers)"
+	@echo "  make test-nim       - Run Nim tests (config + basic)"
+	@echo "  make test-format    - Run Rust bincode format verification tests"
 	@echo "  make test-cross     - Run all Nim↔Rust cross-verification tests"
 	@echo "  make test-cross-variable - Run variable-length encoding cross-verification tests"
 	@echo "  make test-cross-fixed8 - Run fixed 8-byte encoding cross-verification tests"
@@ -43,7 +44,7 @@ examples: build
 	@./bin/struct_example
 
 # Run all tests
-test: test-nim test-cross test-markers
+test: test-nim test-format test-cross test-markers
 
 # Run all cross-verification tests (requires both Rust and Nim)
 test-cross: test-cross-variable test-cross-fixed8
@@ -116,24 +117,39 @@ test-cross-fixed8: install-deps
 	@cargo test --test cross_verification test_nim_serialize_rust_deserialize_fixed8 -- --nocapture || (echo "ERROR: Step 4 failed - check if Nim serialization files exist" && exit 1)
 	@echo "Fixed 8-byte encoding tests complete!"
 
+# Run Rust bincode format verification tests
+test-format: install-deps
+	@echo "=== Rust Bincode Format Verification Tests ==="
+	@cargo test --test bincode_format -- --nocapture
+
 # Run marker byte prefix verification tests
 test-markers: install-deps
 	@echo "=== Marker Byte Prefix Verification Tests ==="
 	@echo "Testing Rust marker byte prefixes..."
 	@cargo test --test cross_verification test_marker_byte_prefixes_variable -- --nocapture
 	@echo ""
+	@echo "Testing Rust byte-for-byte compatibility (variable)..."
+	@cargo test --test cross_verification test_byte_for_byte_compatibility_variable -- --nocapture
+	@echo ""
+	@echo "Testing Rust byte-for-byte compatibility (fixed8)..."
+	@cargo test --test cross_verification test_byte_for_byte_compatibility_fixed8 -- --nocapture
+	@echo ""
 	@echo "Testing Nim marker byte prefixes..."
-	@if [ ! -f target/nim_test_markers ] || [ $(NIM_TESTS)/test_cross_verification.nim -nt target/nim_test_markers ]; then \
-		echo "Compiling Nim marker test with optimizations..."; \
-		nim c -d:release -d:testVariable -o:target/nim_test_markers $(NIM_TESTS)/test_cross_verification.nim; \
+	@# Reuse the binary from test-cross-variable if it exists, otherwise compile
+	@if [ ! -f target/nim_test_variable ]; then \
+		echo "Compiling Nim test (variable) with optimizations..."; \
+		nim c -d:release -d:testVariable -o:target/nim_test_variable $(NIM_TESTS)/test_cross_verification.nim; \
 	fi
-	@./target/nim_test_markers 2>&1 | grep -A 20 "verify marker byte prefixes" || true
+	@./target/nim_test_variable 2>&1 | grep -A 20 "verify marker byte prefixes" || true
 	@echo "Marker byte prefix tests complete!"
 
 # Run Nim tests
 test-nim: install-deps
-	@echo "Running Nim config tests..."
+	@echo "Running Nim tests..."
+	@echo "Running bincode config tests..."
 	nim c -r $(NIM_TESTS)/test_bincode_config.nim
+	@echo "Running bincode basic tests..."
+	nim c -r $(NIM_TESTS)/test_bincode.nim
 
 # Format all Nim files
 format:
@@ -165,6 +181,6 @@ clean:
 	rm -rf bin/
 	rm -f nim/examples/example nim/examples/struct_example
 	rm -f nim/tests/test_bincode nim/tests/test_bincode_config
-	rm -f target/nim_test_variable target/nim_test_fixed8 target/nim_test_markers
+	rm -f target/nim_test_variable target/nim_test_fixed8
 	rm -rf nimcache/
 	@echo "Clean complete."
