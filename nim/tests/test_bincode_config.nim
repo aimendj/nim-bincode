@@ -8,7 +8,7 @@ suite "Bincode Config":
   test "standard config has correct defaults":
     let config = standard()
     check config.byteOrder == LittleEndian
-    check config.intSize == 0
+    check config.intSize == 8
     check config.sizeLimit == BINCODE_SIZE_LIMIT
 
   test "withLittleEndian sets byte order":
@@ -21,7 +21,7 @@ suite "Bincode Config":
 
   test "withFixedIntEncoding with default size":
     let config = standard().withFixedIntEncoding()
-    check config.intSize == 0
+    check config.intSize == 8
 
   test "withFixedIntEncoding with size 1":
     let config = standard().withFixedIntEncoding(1)
@@ -39,9 +39,13 @@ suite "Bincode Config":
     let config = standard().withFixedIntEncoding(8)
     check config.intSize == 8
 
-  test "withVariableIntEncoding sets intSize to -1":
+  test "withFixedIntEncoding with size 0 maps to variable (intSize == 0)":
+    let config = standard().withFixedIntEncoding(0)
+    check config.intSize == 0
+
+  test "withVariableIntEncoding sets intSize to 0":
     let config = standard().withVariableIntEncoding()
-    check config.intSize == -1
+    check config.intSize == 0
 
   test "withLimit sets size limit":
     let customLimit: uint64 = 1024
@@ -49,10 +53,7 @@ suite "Bincode Config":
     check config.sizeLimit == customLimit
 
   test "config builder chaining":
-    let config = standard()
-      .withBigEndian()
-      .withFixedIntEncoding(4)
-      .withLimit(2048'u64)
+    let config = standard().withBigEndian().withFixedIntEncoding(4).withLimit(2048'u64)
     check config.byteOrder == BigEndian
     check config.intSize == 4
     check config.sizeLimit == 2048'u64
@@ -175,7 +176,7 @@ suite "Config Compatibility":
   test "configs with same settings produce same output":
     let data = @[byte(1), 2, 3, 4, 5]
     let config1 = standard()
-    let config2 = standard().withLittleEndian().withFixedIntEncoding(0)
+    let config2 = standard().withLittleEndian().withFixedIntEncoding(8)
     let serialized1 = serialize(data, config1)
     let serialized2 = serialize(data, config2)
     check serialized1 == serialized2

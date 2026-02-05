@@ -11,28 +11,24 @@ type
     ## Use `standard()` to get the default configuration, or build a custom
     ## configuration using the builder methods.
     byteOrder*: ByteOrder
-    intSize*: int ## Integer encoding:
-                    ## - -1 = variable-length encoding (LEB128)
-                    ## - 0 = fixed encoding with natural size (4 for int32/uint32, 8 for int64)
-                    ## - 1, 2, 4, or 8 = fixed encoding with that byte size
+    intSize*: int
+      ## Integer encoding:
+      ## - 0 = variable-length encoding (LEB128)
+      ## - 1, 2, 4, or 8 = fixed encoding with that byte size
     sizeLimit*: uint64
 
-const BINCODE_SIZE_LIMIT* = 65536'u64
+const BINCODE_SIZE_LIMIT* = 65536'u64 # Default 64 KiB limit (matches bincode v2 default)
 
 func standard*(): BincodeConfig {.raises: [].} =
   ## Create a standard bincode configuration with default settings:
   ## - Little-endian byte order
-  ## - Fixed integer encoding (uses natural size: 4 bytes for int32/uint32, 8 bytes for int64)
+  ## - Fixed integer encoding (8-byte integers by default)
   ## - 64 KiB size limit
   ##
   ## This matches the current default behavior for backward compatibility.
   ##
-  ## Note: intSize = 0 means fixed encoding with natural size.
-  return BincodeConfig(
-    byteOrder: LittleEndian,
-    intSize: 0, ## 0 means fixed encoding with natural size
-    sizeLimit: BINCODE_SIZE_LIMIT
-  )
+  return
+    BincodeConfig(byteOrder: LittleEndian, intSize: 8, sizeLimit: BINCODE_SIZE_LIMIT)
 
 func withLittleEndian*(config: BincodeConfig): BincodeConfig {.raises: [].} =
   ## Set byte order to little-endian.
@@ -46,23 +42,26 @@ func withBigEndian*(config: BincodeConfig): BincodeConfig {.raises: [].} =
   output.byteOrder = BigEndian
   return output
 
-func withFixedIntEncoding*(config: BincodeConfig,
-    size: int = 0): BincodeConfig {.raises: [].} =
+func withFixedIntEncoding*(
+    config: BincodeConfig, size: int = 8
+): BincodeConfig {.raises: [].} =
   ## Set integer encoding to fixed-size.
   ##
   ## `size` specifies the number of bytes to use (1, 2, 4, or 8).
-  ## If `size` is 0 (default), uses the natural size of the integer type
-  ## (4 bytes for int32/uint32, 8 bytes for int64/uint64).
+  ## If `size` is 0, it is treated as variable-length encoding.
   var output = config
-  output.intSize = size
+  if size == 0:
+    output.intSize = 0
+  else:
+    output.intSize = size
   return output
 
 func withVariableIntEncoding*(config: BincodeConfig): BincodeConfig {.raises: [].} =
   ## Set integer encoding to variable-length (LEB128).
   ##
-  ## This sets intSize to -1 to indicate variable encoding.
+  ## This sets intSize to 0 to indicate variable encoding.
   var output = config
-  output.intSize = -1
+  output.intSize = 0
   return output
 
 func withLimit*(config: BincodeConfig, limit: uint64): BincodeConfig {.raises: [].} =
