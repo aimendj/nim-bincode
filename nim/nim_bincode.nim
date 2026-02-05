@@ -15,8 +15,6 @@ type BincodeError* = object of CatchableError
   ## Exception raised when bincode operations fail
 
 const LENGTH_PREFIX_SIZE* = 8
-const INT32_SIZE* = 4
-const INT64_SIZE* = 8
 
 proc checkSizeLimit*(
     size: uint64, limit: uint64 = BINCODE_SIZE_LIMIT
