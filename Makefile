@@ -32,8 +32,8 @@ install-deps:
 build: install-deps
 	@echo "Building Nim examples..."
 	@mkdir -p bin
-	nim c -d:release -o:bin/example $(NIM_EXAMPLES)/example.nim
-	nim c -d:release -o:bin/struct_example $(NIM_EXAMPLES)/struct_example.nim
+	nim c -d:release $(NIM_EXAMPLES)/example.nim
+	nim c -d:release $(NIM_EXAMPLES)/struct_example.nim
 	@echo "Nim examples built in bin/"
 
 # Build and run examples
@@ -155,6 +155,7 @@ test-nim: install-deps
 format:
 	@echo "Formatting Nim files..."
 	nph nim/nim_bincode.nim
+	nph nim/bincode_common.nim
 	nph nim/bincode_config.nim
 	nph nim/examples/example.nim
 	nph nim/examples/struct_example.nim
@@ -166,6 +167,7 @@ format:
 format-check:
 	@echo "Checking Nim file formatting..."
 	@nph --check nim/nim_bincode.nim && \
+	 nph --check nim/bincode_common.nim && \
 	 nph --check nim/bincode_config.nim && \
 	 nph --check nim/examples/example.nim && \
 	 nph --check nim/examples/struct_example.nim && \
