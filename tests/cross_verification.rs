@@ -75,33 +75,6 @@ fn format_vec_for_log(data: &[u8]) -> String {
     }
 }
 
-/// Serialize data with standard config and write to file
-fn serialize_to_file(data: &[u8], filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let serialized = bincode::encode_to_vec(data, standard_config())?;
-    let test_dir = PathBuf::from("target/test_data");
-    fs::create_dir_all(&test_dir)?;
-    let file_path = test_dir.join(filename);
-    fs::write(&file_path, &serialized)?;
-    Ok(())
-}
-
-/// Deserialize data that was serialized with standard config
-fn deserialize_from_file(filename: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let test_dir = PathBuf::from("target/test_data");
-    let file_path = test_dir.join(filename);
-    let serialized = fs::read(&file_path)?;
-    let (deserialized, bytes_read): (Vec<u8>, _) = 
-        bincode::decode_from_slice(&serialized, standard_config())?;
-    
-    // Verify all bytes were consumed (no trailing bytes)
-    if bytes_read != serialized.len() {
-        return Err(format!("Trailing bytes detected: read {} of {} bytes", 
-            bytes_read, serialized.len()).into());
-    }
-    
-    Ok(deserialized)
-}
-
 /// Serialize data with variable-length encoding and write to file
 fn serialize_to_file_variable(data: &[u8], filename: &str) -> Result<(), Box<dyn std::error::Error>> {
     let serialized = bincode::encode_to_vec(data, variable_config())?;
