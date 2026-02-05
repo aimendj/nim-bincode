@@ -16,6 +16,20 @@ type BincodeError* = object of CatchableError
 
 const LENGTH_PREFIX_SIZE* = 8
 
+# Rust bincode variable-length encoding constants
+# Values < 251: Single byte (the value itself)
+# Values 251 to 2^16-1: 0xfb + u16 LE
+# Values 2^16 to 2^32-1: 0xfc + u32 LE
+# Values 2^32 to 2^64-1: 0xfd + u64 LE
+# Values 2^64 to 2^128-1: 0xfe + u128 LE
+const RUST_BINCODE_THRESHOLD_U16* = 251'u64
+const RUST_BINCODE_THRESHOLD_U32* = 65536'u64 # 2^16
+const RUST_BINCODE_THRESHOLD_U64* = 4294967296'u64 # 2^32
+const RUST_BINCODE_MARKER_U16* = 0xfb'u8
+const RUST_BINCODE_MARKER_U32* = 0xfc'u8
+const RUST_BINCODE_MARKER_U64* = 0xfd'u8
+const RUST_BINCODE_MARKER_U128* = 0xfe'u8
+
 proc checkSizeLimit*(
     size: uint64, limit: uint64 = BINCODE_SIZE_LIMIT
 ) {.raises: [BincodeError].} =
@@ -80,29 +94,19 @@ func encodeLength*(length: uint64, config: BincodeConfig): seq[byte] {.raises: [
       let bytes = toBytesLE(length)
       return
         @[
-          bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]
+          bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6],
+              bytes[7]
         ]
     of BigEndian:
       let bytes = toBytesBE(length)
       return
         @[
-          bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]
+          bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6],
+              bytes[7]
         ]
   else:
     # Variable encoding: Rust bincode uses special encoding
-    # Values < 251: Single byte (the value itself)
-    # Values 251 to 2^16-1: 0xfb + u16 LE
-    # Values 2^16 to 2^32-1: 0xfc + u32 LE
-    # Values 2^32 to 2^64-1: 0xfd + u64 LE
-    # Values 2^64 to 2^128-1: 0xfe + u128 LE
-    const RUST_BINCODE_THRESHOLD_U16 = 251'u64
-    const RUST_BINCODE_THRESHOLD_U32 = 65536'u64 # 2^16
-    const RUST_BINCODE_THRESHOLD_U64 = 4294967296'u64 # 2^32
-    const RUST_BINCODE_MARKER_U16 = 0xfb'u8
-    const RUST_BINCODE_MARKER_U32 = 0xfc'u8
-    const RUST_BINCODE_MARKER_U64 = 0xfd'u8
     # Note: RUST_BINCODE_MARKER_U128 (0xfe) is not used in encoding since length is uint64 (max 2^64-1)
-
     if length < RUST_BINCODE_THRESHOLD_U16:
       # Single byte: the value itself
       return @[length.byte]
@@ -158,11 +162,6 @@ proc decodeLength*(
   else:
     # Variable encoding: Rust bincode uses special encoding
     # Check for marker bytes: 0xfb (u16), 0xfc (u32), 0xfd (u64), 0xfe (u128)
-    const RUST_BINCODE_MARKER_U16 = 0xfb'u8
-    const RUST_BINCODE_MARKER_U32 = 0xfc'u8
-    const RUST_BINCODE_MARKER_U64 = 0xfd'u8
-    const RUST_BINCODE_MARKER_U128 = 0xfe'u8
-
     if data.len == 0:
       raise newException(BincodeError, "Insufficient data for length prefix")
 
