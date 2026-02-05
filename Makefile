@@ -161,6 +161,7 @@ format:
 	nph nim/examples/struct_example.nim
 	nph nim/tests/test_bincode.nim
 	nph nim/tests/test_bincode_config.nim
+	nph nim/tests/test_cross_verification.nim
 	@echo "Formatting complete."
 
 # Check if Nim files are formatted
@@ -173,6 +174,7 @@ format-check:
 	 nph --check nim/examples/struct_example.nim && \
 	 nph --check nim/tests/test_bincode.nim && \
 	 nph --check nim/tests/test_bincode_config.nim && \
+	 nph --check nim/tests/test_cross_verification.nim && \
 	 echo "All files are properly formatted." || \
 	 (echo "Some files are not formatted. Run 'make format' to fix." && exit 1)
 
