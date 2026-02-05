@@ -268,15 +268,22 @@ proc deserialize*(
   ## Raises `BincodeError` if:
   ## - Data is insufficient for length prefix
   ## - Length exceeds the configured size limit
+  ## - Length value exceeds maximum int size (prevents integer overflow)
   ## - Insufficient data for content
   ## - Trailing bytes detected (all input bytes must be consumed)
 
   checkMinimumSize(data.len, 1)
 
   let (lengthValue, prefixSize) = decodeLength(data, config)
-  let length = lengthValue.int
 
   checkLengthLimit(lengthValue, config.sizeLimit)
+
+  # Check for integer overflow when converting uint64 to int
+  # On 32-bit platforms, int.high is 2^31-1, so values > int.high would overflow
+  if lengthValue > int.high.uint64:
+    raise newException(BincodeError, "Length value exceeds maximum int size")
+
+  let length = lengthValue.int
   checkSufficientData(data.len, prefixSize, length)
 
   var output = newSeq[byte](length)
