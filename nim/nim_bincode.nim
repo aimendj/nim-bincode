@@ -70,9 +70,7 @@ func zigzagDecode*(value: uint64): int64 {.raises: [].} =
   else:
     not ((value shr 1).int64)
 
-func encodeLength*(
-    length: uint64, config: BincodeConfig
-): seq[byte] {.raises: [BincodeError].} =
+func encodeLength*(length: uint64, config: BincodeConfig): seq[byte] {.raises: [].} =
   ## Encode a length value according to the config's integer encoding.
   if config.intSize > 0:
     case config.byteOrder
