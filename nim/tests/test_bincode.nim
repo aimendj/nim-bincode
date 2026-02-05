@@ -26,15 +26,15 @@ suite "Basic serialize/deserialize":
     let original = @[byte(1), 2, 3, 4, 5]
     let serialized = serialize(original)
     check serialized.len == 13 # 8 bytes length + 5 bytes data
-    check serialized[0..7] == @[byte(5), 0, 0, 0, 0, 0, 0, 0] # length prefix
-    check serialized[8..12] == original # data
+    check serialized[0 .. 7] == @[byte(5), 0, 0, 0, 0, 0, 0, 0] # length prefix
+    check serialized[8 .. 12] == original # data
     check original == deserialize(serialized)
 
   test "serialize and deserialize single byte":
     let original = @[byte(42)]
     let serialized = serialize(original)
     check serialized.len == 9 # 8 bytes length + 1 byte data
-    check serialized[0..7] == @[byte(1), 0, 0, 0, 0, 0, 0, 0] # length = 1
+    check serialized[0 .. 7] == @[byte(1), 0, 0, 0, 0, 0, 0, 0] # length = 1
     check serialized[8] == byte(42)
     check original == deserialize(serialized)
 
@@ -86,7 +86,7 @@ suite "Basic serialize/deserialize":
 
   test "serialize with data exceeding limit raises":
     var large = newSeq[byte](65537) # 65537 bytes > 65536 limit
-    for i in 0..<large.len:
+    for i in 0 ..< large.len:
       large[i] = byte(i mod 256)
     expect BincodeError:
       discard serialize(large)
@@ -104,7 +104,7 @@ suite "Basic serialize/deserialize":
     invalid[6] = byte(0)
     invalid[7] = byte(0)
     # Add some dummy data
-    for i in 8..<invalid.len:
+    for i in 8 ..< invalid.len:
       invalid[i] = byte(i)
     expect BincodeError:
       discard deserialize(invalid)
@@ -129,7 +129,7 @@ suite "String serialization":
     let original = "Hello, World!"
     let serialized = serializeString(original)
     check serialized.len == 21 # 8 bytes length + 13 bytes UTF-8
-    check serialized[0..7] == @[byte(13), 0, 0, 0, 0, 0, 0, 0] # length prefix
+    check serialized[0 .. 7] == @[byte(13), 0, 0, 0, 0, 0, 0, 0] # length prefix
     check original == deserializeString(serialized)
 
   test "roundtrip string serialization":
