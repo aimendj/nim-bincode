@@ -96,7 +96,7 @@ proc serializeInt32*(
   else:
     let zigzag = zigzagEncode(value.int64)
     let buf = toBytes(zigzag, Leb128)
-    intBytes = @buf
+    intBytes = @(buf.toOpenArray())
   return serialize(intBytes, config)
 
 proc deserializeInt32*(
@@ -160,7 +160,7 @@ proc serializeUint32*(
       copyMem(intBytes[0].addr, bytes[8 - size].addr, size)
   else:
     let buf = toBytes(value.uint64, Leb128)
-    intBytes = @buf
+    intBytes = @(buf.toOpenArray())
   return serialize(intBytes, config)
 
 proc deserializeUint32*(
@@ -224,7 +224,7 @@ proc serializeInt64*(
   else:
     let zigzag = zigzagEncode(value)
     let buf = toBytes(zigzag, Leb128)
-    intBytes = @buf
+    intBytes = @(buf.toOpenArray())
   return serialize(intBytes, config)
 
 proc deserializeInt64*(
