@@ -1,4 +1,4 @@
-{.push raises: [BincodeError], gcsafe.}
+{.push raises: [], gcsafe.}
 
 import unittest
 import ../bincode_config
@@ -42,6 +42,18 @@ suite "Bincode Config":
   test "withFixedIntEncoding with size 0 maps to variable (intSize == 0)":
     let config = standard().withFixedIntEncoding(0)
     check config.intSize == 0
+
+  test "withFixedIntEncoding with invalid size raises BincodeConfigError":
+    expect BincodeConfigError:
+      discard standard().withFixedIntEncoding(3)
+    expect BincodeConfigError:
+      discard standard().withFixedIntEncoding(5)
+    expect BincodeConfigError:
+      discard standard().withFixedIntEncoding(7)
+    expect BincodeConfigError:
+      discard standard().withFixedIntEncoding(9)
+    expect BincodeConfigError:
+      discard standard().withFixedIntEncoding(-1)
 
   test "withVariableIntEncoding sets intSize to 0":
     let config = standard().withVariableIntEncoding()

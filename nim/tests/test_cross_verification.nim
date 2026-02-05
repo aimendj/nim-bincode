@@ -1,4 +1,4 @@
-{.push raises: [BincodeError, IOError, OSError], gcsafe.}
+{.push raises: [], gcsafe.}
 
 import unittest
 import os
@@ -138,7 +138,7 @@ proc formatVecForLog(data: openArray[byte]): string {.raises: [].} =
     return $data
 
 proc serializeToFile(data: openArray[byte], filename: string,
-    config: BincodeConfig = standard()): void =
+    config: BincodeConfig = standard()): void {.raises: [BincodeError, IOError, OSError].} =
   ## Serialize data and write to file for Rust to read
   let serialized = serialize(data, config)
   createDir(TestDataDir)

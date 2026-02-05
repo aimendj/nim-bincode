@@ -1,6 +1,9 @@
 {.push raises: [], gcsafe.}
 
 type
+  BincodeConfigError* = object of CatchableError
+    ## Exception raised when bincode configuration is invalid
+
   ByteOrder* = enum
     LittleEndian
     BigEndian
@@ -44,15 +47,19 @@ func withBigEndian*(config: BincodeConfig): BincodeConfig {.raises: [].} =
 
 func withFixedIntEncoding*(
     config: BincodeConfig, size: int = 8
-): BincodeConfig {.raises: [].} =
+): BincodeConfig {.raises: [BincodeConfigError].} =
   ## Set integer encoding to fixed-size.
   ##
   ## `size` specifies the number of bytes to use (1, 2, 4, or 8).
   ## If `size` is 0, it is treated as variable-length encoding.
+  ## Raises `BincodeConfigError` if size is not 0, 1, 2, 4, or 8.
   var output = config
   if size == 0:
     output.intSize = 0
   else:
+    if size notin [1, 2, 4, 8]:
+      raise
+        newException(BincodeConfigError, "Invalid fixedIntSize: must be 1, 2, 4, or 8")
     output.intSize = size
   return output
 

@@ -350,8 +350,6 @@ proc serializeInt32*(
   var intBytes: seq[byte]
   if config.intSize > 0:
     let size = config.intSize
-    if size notin [1, 2, 4, 8]:
-      raise newException(BincodeError, "Invalid fixedIntSize: must be 1, 2, 4, or 8")
     let bytes =
       case config.byteOrder
       of LittleEndian:
@@ -417,8 +415,6 @@ proc serializeUint32*(
   var intBytes: seq[byte]
   if config.intSize > 0:
     let size = config.intSize
-    if size notin [1, 2, 4, 8]:
-      raise newException(BincodeError, "Invalid fixedIntSize: must be 1, 2, 4, or 8")
     let bytes =
       case config.byteOrder
       of LittleEndian:
@@ -482,8 +478,6 @@ proc serializeInt64*(
   var intBytes: seq[byte]
   if config.intSize > 0:
     let size = config.intSize
-    if size notin [1, 2, 4, 8]:
-      raise newException(BincodeError, "Invalid fixedIntSize: must be 1, 2, 4, or 8")
     let bytes =
       case config.byteOrder
       of LittleEndian:
