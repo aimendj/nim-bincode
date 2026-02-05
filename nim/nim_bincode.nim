@@ -42,16 +42,20 @@ proc checkLengthLimit*(
   if length > limit:
     raise newException(BincodeError, "Length exceeds size limit")
 
-proc checkSufficientData*(dataLen: int, length: int) {.raises: [BincodeError].} =
+proc checkSufficientData*(
+    dataLen: int, prefixSize: int, length: int
+) {.raises: [BincodeError].} =
   ## Check if data has sufficient bytes for the decoded length.
   ## Raises `BincodeError` if insufficient data.
-  if dataLen < LENGTH_PREFIX_SIZE + length:
+  if dataLen < prefixSize + length:
     raise newException(BincodeError, "Insufficient data for content")
 
-proc checkNoTrailingBytes*(dataLen: int, length: int) {.raises: [BincodeError].} =
+proc checkNoTrailingBytes*(
+    dataLen: int, prefixSize: int, length: int
+) {.raises: [BincodeError].} =
   ## Check if there are no trailing bytes after the expected data.
   ## Raises `BincodeError` if trailing bytes detected.
-  if dataLen != LENGTH_PREFIX_SIZE + length:
+  if dataLen != prefixSize + length:
     raise newException(BincodeError, "Trailing bytes detected")
 
 func zigzagEncode*(value: int64): uint64 {.raises: [].} =
@@ -78,13 +82,15 @@ func encodeLength*(length: uint64, config: BincodeConfig): seq[byte] {.raises: [
       let bytes = toBytesLE(length)
       return
         @[
-          bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]
+          bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6],
+              bytes[7]
         ]
     of BigEndian:
       let bytes = toBytesBE(length)
       return
         @[
-          bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]
+          bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6],
+              bytes[7]
         ]
   else:
     # Variable encoding: Rust bincode uses special encoding
@@ -265,23 +271,19 @@ proc deserialize*(
   ## - Insufficient data for content
   ## - Trailing bytes detected (all input bytes must be consumed)
 
-  if data.len == 0:
-    raise newException(BincodeError, "Insufficient data for length prefix")
+  checkMinimumSize(data.len, 1)
 
   let (lengthValue, prefixSize) = decodeLength(data, config)
   let length = lengthValue.int
 
   checkLengthLimit(lengthValue, config.sizeLimit)
-
-  if data.len < prefixSize + length:
-    raise newException(BincodeError, "Insufficient data for content")
+  checkSufficientData(data.len, prefixSize, length)
 
   var output = newSeq[byte](length)
   if length > 0:
     copyMem(output[0].addr, data[prefixSize].unsafeAddr, length)
 
-  if data.len != prefixSize + length:
-    raise newException(BincodeError, "Trailing bytes detected")
+  checkNoTrailingBytes(data.len, prefixSize, length)
 
   return output
 
