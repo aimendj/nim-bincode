@@ -94,15 +94,13 @@ func encodeLength*(length: uint64, config: BincodeConfig): seq[byte] {.raises: [
       let bytes = toBytesLE(length)
       return
         @[
-          bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6],
-              bytes[7]
+          bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]
         ]
     of BigEndian:
       let bytes = toBytesBE(length)
       return
         @[
-          bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6],
-              bytes[7]
+          bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]
         ]
   else:
     # Variable encoding: Rust bincode uses special encoding
