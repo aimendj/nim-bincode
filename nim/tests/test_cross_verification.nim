@@ -66,31 +66,6 @@ const DeserializeTestFilesFixed8 {.used.}: array[14, string] = [
   "nim_fixed8_014.bin",
 ]
 
-# Get test cases for serialization (data + filename pairs)
-# The prefix parameter determines the filename prefix (e.g., "rust_var", "rust_fixed8")
-# Note: Currently unused, kept for potential future use
-proc getSerializeTestCases(prefix: string): seq[TestCase] {.raises: [], used.} =
-  var data100 = newSeq[byte](100)
-  for i in 0..<data100.len:
-    data100[i] = byte(1)
-
-  return @[
-    (@[byte(1), 2, 3, 4, 5], prefix & "_001.bin"),
-    (@[], prefix & "_002.bin"),
-    (@[byte(0), 255, 128, 64], prefix & "_003.bin"),
-    (data100, prefix & "_004.bin"),
-    (cast[seq[byte]]("Hello, World!"), prefix & "_005.bin"),
-    (@[byte(42)], prefix & "_006.bin"),
-    (cast[seq[byte]]("Test with émojis 🚀"), prefix & "_007.bin"),
-    (newSeq[byte](20 * 1024), prefix & "_008.bin"), # 20kB
-    (newSeq[byte](250), prefix & "_009.bin"), # Just below 251 threshold (uses single byte)
-    (newSeq[byte](251), prefix & "_010.bin"), # Just at 251 threshold (uses 0xfb + u16 LE)
-    (newSeq[byte](65535), prefix & "_011.bin"), # Just below 2^16 threshold (uses 0xfb + u16 LE: 3 + 65535 = 65538)
-    (newSeq[byte](65536), prefix & "_012.bin"), # Just at 2^16 threshold (uses 0xfc + u32 LE: 5 + 65536 = 65541)
-    (newSeq[byte](4294967295), prefix & "_013.bin"), # Just below 2^32 threshold (uses 0xfc + u32 LE: 5 + 4294967295 = 4294967300)
-    (newSeq[byte](4294967296), prefix & "_014.bin"), # Just at 2^32 threshold (uses 0xfd + u64 LE: 9 + 4294967296 = 4294967305)
-  ]
-
 # Get expected data for deserialization tests
 # Large arrays (4GB+) are created lazily to avoid slow upfront allocation
 proc getExpectedData(): seq[seq[byte]] {.raises: [].} =
