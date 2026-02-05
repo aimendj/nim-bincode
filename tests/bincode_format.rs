@@ -1,6 +1,7 @@
 use bincode;
 
-/// Create bincode config matching our FFI wrapper implementation
+/// Create bincode config matching the format used by the Nim implementation
+/// and the Rust ↔ Nim cross‑verification tests.
 fn bincode_config() -> impl bincode::config::Config {
     bincode::config::standard()
         .with_little_endian()
