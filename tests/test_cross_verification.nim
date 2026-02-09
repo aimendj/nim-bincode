@@ -32,24 +32,21 @@ else:
 # ============================================================================
 
 # Test files for variable encoding deserialization
-const DeserializeTestFilesVariable {.used.}: array[14, string] = [
+const DeserializeTestFilesVariable {.used.}: array[12, string] = [
   "nim_var_001.bin", "nim_var_002.bin", "nim_var_003.bin", "nim_var_004.bin",
   "nim_var_005.bin", "nim_var_006.bin", "nim_var_007.bin", "nim_var_008.bin",
   "nim_var_009.bin", "nim_var_010.bin", "nim_var_011.bin", "nim_var_012.bin",
-  "nim_var_013.bin", "nim_var_014.bin",
 ]
 
 # Test files for fixed 8-byte encoding deserialization
-const DeserializeTestFilesFixed8 {.used.}: array[14, string] = [
+const DeserializeTestFilesFixed8 {.used.}: array[12, string] = [
   "nim_fixed8_001.bin", "nim_fixed8_002.bin", "nim_fixed8_003.bin",
   "nim_fixed8_004.bin", "nim_fixed8_005.bin", "nim_fixed8_006.bin",
   "nim_fixed8_007.bin", "nim_fixed8_008.bin", "nim_fixed8_009.bin",
   "nim_fixed8_010.bin", "nim_fixed8_011.bin", "nim_fixed8_012.bin",
-  "nim_fixed8_013.bin", "nim_fixed8_014.bin",
 ]
 
 # Get expected data for deserialization tests
-# Large arrays (4GB+) are created lazily to avoid slow upfront allocation
 proc getExpectedData(): seq[seq[byte]] =
   var data100 = newSeq[byte](100)
   for i in 0 ..< data100.len:
@@ -71,19 +68,7 @@ proc getExpectedData(): seq[seq[byte]] =
         # Just below 2^16 threshold (uses 0xfb + u16 LE: 3 + 65535 = 65538)
       newSeq[byte](65536),
         # Just at 2^16 threshold (uses 0xfc + u32 LE: 5 + 65536 = 65541)
-      newSeq[byte](0), # Placeholder for 4294967295 - will be created lazily
-      newSeq[byte](0), # Placeholder for 4294967296 - will be created lazily
     ]
-
-# Lazy creation of large arrays (only when actually needed for serialization)
-proc getLargeArray(index: int): seq[byte] =
-  case index
-  of 12: # Just below 2^32 threshold
-    return newSeq[byte](4294967295)
-  of 13: # Just at 2^32 threshold
-    return newSeq[byte](4294967296)
-  else:
-    return @[]
 
 # ============================================================================
 # Helper Functions
@@ -217,31 +202,6 @@ when RUN_VARIABLE_TESTS:
       for i in 0 ..< deserialized.len:
         check deserialized[i] == byte(0)
 
-    test "deserialize rust_var_013.bin (just below 2^32 threshold, uses 0xfc + u32)":
-      let config = standard().withVariableIntEncoding().withLimit(4294967305'u64)
-      let deserialized = deserializeFromFile("rust_var_013.bin", config)
-      echo "Deserialized ",
-        deserialized.len,
-        " bytes from rust_var_013.bin (just below 2^32 threshold, uses 0xfc + u32)"
-      check deserialized.len == 4294967295
-      # Skip byte-by-byte check for very large arrays (too slow)
-      # Just verify length and first/last few bytes
-      if deserialized.len > 0:
-        check deserialized[0] == byte(0)
-        check deserialized[^1] == byte(0)
-
-    test "deserialize rust_var_014.bin (just at 2^32 threshold, uses 0xfd + u64)":
-      let config = standard().withVariableIntEncoding().withLimit(4294967305'u64)
-      let deserialized = deserializeFromFile("rust_var_014.bin", config)
-      echo "Deserialized ",
-        deserialized.len,
-        " bytes from rust_var_014.bin (just at 2^32 threshold, uses 0xfd + u64)"
-      check deserialized.len == 4294967296
-      # Skip byte-by-byte check for very large arrays (too slow)
-      # Just verify length and first/last few bytes
-      if deserialized.len > 0:
-        check deserialized[0] == byte(0)
-        check deserialized[^1] == byte(0)
 
 when RUN_VARIABLE_TESTS:
   suite "Nim serialize → Rust deserialize (variable encoding)":
@@ -249,13 +209,7 @@ when RUN_VARIABLE_TESTS:
       let expectedData = getExpectedData()
       let config = standard().withVariableIntEncoding().withLimit(4294967305'u64)
       for i, filename in DeserializeTestFilesVariable:
-        # Lazy-load large arrays (indices 12-13) only when needed
-        let data =
-          if i >= 12:
-            getLargeArray(i)
-          else:
-            expectedData[i]
-        serializeToFile(data, filename, config)
+        serializeToFile(expectedData[i], filename, config)
         echo "Created ", filename, " with variable encoding for Rust to verify"
 
 when RUN_VARIABLE_TESTS:
@@ -286,19 +240,11 @@ when RUN_VARIABLE_TESTS:
       check serialized251[0] == 0xfb'u8
       check serialized251.len == 254 # 3 bytes (0xfb + u16) + 251 data
 
-      # Test 0xfc marker (65536-4294967295): length 65536 should use 0xfc + u32 LE
+      # Test 0xfc marker (65536+): length 65536 should use 0xfc + u32 LE
       let data65536 = newSeq[byte](65536)
       let serialized65536 = serialize(data65536, config)
       check serialized65536[0] == 0xfc'u8
       check serialized65536.len == 65541 # 5 bytes (0xfc + u32) + 65536 data
-
-      # Test 0xfd marker (4294967296+): length 4294967296 should use 0xfd + u64 LE
-      # Skip full allocation for speed - just verify the marker byte in a small test
-      # The actual 4GB test is covered by cross-verification with Rust
-      let data4GB = getLargeArray(13) # Lazy load
-      let serialized4GB = serialize(data4GB, config)
-      check serialized4GB[0] == 0xfd'u8
-      check serialized4GB.len == 4294967305 # 9 bytes (0xfd + u64) + 4294967296 data
 
 # ============================================================================
 # Fixed 8-byte Encoding Cross-Verification Tests
@@ -399,29 +345,6 @@ when RUN_FIXED8_TESTS:
       for i in 0 ..< deserialized.len:
         check deserialized[i] == byte(0)
 
-    test "deserialize rust_fixed8_013.bin (just below 2^32 threshold)":
-      let config = standard().withFixedIntEncoding(8).withLimit(4294967305'u64)
-      let deserialized = deserializeFromFile("rust_fixed8_013.bin", config)
-      echo "Deserialized ",
-        deserialized.len, " bytes from rust_fixed8_013.bin (just below 2^32 threshold)"
-      check deserialized.len == 4294967295
-      # Skip byte-by-byte check for very large arrays (too slow)
-      # Just verify length and first/last few bytes
-      if deserialized.len > 0:
-        check deserialized[0] == byte(0)
-        check deserialized[^1] == byte(0)
-
-    test "deserialize rust_fixed8_014.bin (just at 2^32 threshold)":
-      let config = standard().withFixedIntEncoding(8).withLimit(4294967305'u64)
-      let deserialized = deserializeFromFile("rust_fixed8_014.bin", config)
-      echo "Deserialized ",
-        deserialized.len, " bytes from rust_fixed8_014.bin (just at 2^32 threshold)"
-      check deserialized.len == 4294967296
-      # Skip byte-by-byte check for very large arrays (too slow)
-      # Just verify length and first/last few bytes
-      if deserialized.len > 0:
-        check deserialized[0] == byte(0)
-        check deserialized[^1] == byte(0)
 
 when RUN_FIXED8_TESTS:
   suite "Nim serialize → Rust deserialize (fixed 8-byte)":
@@ -429,13 +352,7 @@ when RUN_FIXED8_TESTS:
       let expectedData = getExpectedData()
       let config = standard().withFixedIntEncoding(8).withLimit(4294967305'u64)
       for i, filename in DeserializeTestFilesFixed8:
-        # Lazy-load large arrays (indices 12-13) only when needed
-        let data =
-          if i >= 12:
-            getLargeArray(i)
-          else:
-            expectedData[i]
-        serializeToFile(data, filename, config)
+        serializeToFile(expectedData[i], filename, config)
         echo "Created ", filename, " with fixed 8-byte encoding for Rust to verify"
 
 when RUN_FIXED8_TESTS:

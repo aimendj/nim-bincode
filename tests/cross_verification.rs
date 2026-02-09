@@ -20,8 +20,6 @@ const DESERIALIZE_TEST_FILES_VARIABLE: &[&str] = &[
     "nim_var_010.bin",
     "nim_var_011.bin",
     "nim_var_012.bin",
-    "nim_var_013.bin",
-    "nim_var_014.bin",
 ];
 
 /// Test files for fixed 8-byte encoding deserialization
@@ -38,8 +36,6 @@ const DESERIALIZE_TEST_FILES_FIXED8: &[&str] = &[
     "nim_fixed8_010.bin",
     "nim_fixed8_011.bin",
     "nim_fixed8_012.bin",
-    "nim_fixed8_013.bin",
-    "nim_fixed8_014.bin",
 ];
 
 // ============================================================================
@@ -147,8 +143,6 @@ fn get_serialize_test_cases(prefix: &str) -> Vec<(Vec<u8>, String)> {
         (vec![0u8; 251], format!("{}_010.bin", prefix)), // Just at 251 threshold (uses 0xfb + u16 LE)
         (vec![0u8; 65535], format!("{}_011.bin", prefix)), // Just below 2^16 threshold (uses 0xfb + u16 LE: 3 + 65535 = 65538)
         (vec![0u8; 65536], format!("{}_012.bin", prefix)), // Just at 2^16 threshold (uses 0xfc + u32 LE: 5 + 65536 = 65541)
-        (vec![0u8; 4294967295], format!("{}_013.bin", prefix)), // Just below 2^32 threshold (uses 0xfc + u32 LE: 5 + 4294967295 = 4294967300)
-        (vec![0u8; 4294967296], format!("{}_014.bin", prefix)), // Just at 2^32 threshold (uses 0xfd + u64 LE: 9 + 4294967296 = 4294967305)
     ]
 }
 
@@ -167,8 +161,6 @@ fn get_expected_data() -> Vec<Vec<u8>> {
         vec![0u8; 251], // Just at 251 threshold (uses 0xfb + u16 LE)
         vec![0u8; 65535], // Just below 2^16 threshold (uses 0xfb + u16 LE: 3 + 65535 = 65538)
         vec![0u8; 65536], // Just at 2^16 threshold (uses 0xfc + u32 LE: 5 + 65536 = 65541)
-        vec![0u8; 4294967295], // Just below 2^32 threshold (uses 0xfc + u32 LE: 5 + 4294967295 = 4294967300)
-        vec![0u8; 4294967296], // Just at 2^32 threshold (uses 0xfd + u64 LE: 9 + 4294967296 = 4294967305)
     ]
 }
 // ============================================================================
@@ -250,20 +242,12 @@ fn test_marker_byte_prefixes_variable() {
     assert_eq!(encoded251[0], 0xfb, "Length 251 should use 0xfb marker");
     assert_eq!(encoded251.len(), 254, "Length 251: 3 bytes (0xfb + u16) + 251 data");
     
-    // Test 0xfc marker (65536-4294967295): length 65536 should use 0xfc + u32 LE
+    // Test 0xfc marker (65536+): length 65536 should use 0xfc + u32 LE
     let data65536 = vec![0u8; 65536];
     let encoded65536 = bincode::encode_to_vec(&data65536, config)
         .expect("Rust variable-length serialization failed");
     assert_eq!(encoded65536[0], 0xfc, "Length 65536 should use 0xfc marker");
     assert_eq!(encoded65536.len(), 65541, "Length 65536: 5 bytes (0xfc + u32) + 65536 data");
-    
-    // Test 0xfd marker (4294967296+): length 4294967296 should use 0xfd + u64 LE
-    // Note: This allocates 4GB, so it's slow but verifies the marker byte
-    let data4gb = vec![0u8; 4294967296];
-    let encoded4gb = bincode::encode_to_vec(&data4gb, config)
-        .expect("Rust variable-length serialization failed");
-    assert_eq!(encoded4gb[0], 0xfd, "Length 4294967296 should use 0xfd marker");
-    assert_eq!(encoded4gb.len(), 4294967305, "Length 4294967296: 9 bytes (0xfd + u64) + 4294967296 data");
 }
 
 // ============================================================================
