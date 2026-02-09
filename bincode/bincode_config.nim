@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 # Copyright (c) Status Research & Development GmbH
 
-{.push raises: [], gcsafe.}
+{.push raises: [BincodeConfigError], gcsafe.}
 
 type
   BincodeConfigError* = object of CatchableError
@@ -47,7 +47,7 @@ func withBigEndian*(config: BincodeConfig): BincodeConfig =
   output.byteOrder = BigEndian
   output
 
-func withFixedIntEncoding*(config: BincodeConfig, size: int = 8): BincodeConfig =
+proc withFixedIntEncoding*(config: BincodeConfig, size: int = 8): BincodeConfig =
   ## Set integer encoding to fixed-size.
   ##
   ## `size` specifies the number of bytes to use (1, 2, 4, or 8).
@@ -58,8 +58,7 @@ func withFixedIntEncoding*(config: BincodeConfig, size: int = 8): BincodeConfig 
     output.intSize = 0
   else:
     if size notin [1, 2, 4, 8]:
-      raise
-        newException(BincodeConfigError, "Invalid fixedIntSize: must be 1, 2, 4, or 8")
+      raise newException(BincodeConfigError, "Invalid fixedIntSize: must be 1, 2, 4, or 8")
     output.intSize = size
   output
 

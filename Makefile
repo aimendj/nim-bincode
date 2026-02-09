@@ -63,18 +63,18 @@ test-cross-variable: install-deps
 		echo "Compiling Nim test (variable) with optimizations..."; \
 		nim c -d:release -d:testVariable -o:target/nim_test_variable $(NIM_TESTS)/test_cross_verification.nim; \
 	fi
-	@start=$$(date +%s); if ./target/nim_test_variable 2>&1 | tee /tmp/nim_step2_var.log | grep -A 50 "Rust serialize → Nim deserialize (variable encoding)" | grep -E "\[OK\]|\[FAIL\]|^Deserialized"; then \
+	@start=$$(date +%s); if ./target/nim_test_variable 2>&1 | tee /tmp/nim_step2_var.log | grep -A 50 "Rust serialize → Nim deserialize (variable encoding)" | grep -E "\[OK\]|\[FAIL\]|Deserialized"; then \
 		end=$$(date +%s); echo "Nim Step 2 (variable) took $$((end-start))s"; \
-	else \
+		else \
 		end=$$(date +%s); echo "Nim Step 2 (variable) took $$((end-start))s"; \
 		echo "ERROR: Step 2 failed - check if Rust serialization files exist"; \
 		cat /tmp/nim_step2_var.log | tail -50; \
 		exit 1; \
 	fi
 	@echo "Step 3: Nim serializes data (variable)..."
-	@start=$$(date +%s); if ./target/nim_test_variable 2>&1 | tee /tmp/nim_step3_var.log | grep -A 50 "Nim serialize → Rust deserialize (variable encoding)" | grep -E "\[OK\]|\[FAIL\]|Created.*variable|^Serialized"; then \
+	@start=$$(date +%s); if ./target/nim_test_variable 2>&1 | tee /tmp/nim_step3_var.log | grep -A 50 "Nim serialize → Rust deserialize (variable encoding)" | grep -E "\[OK\]|\[FAIL\]|Created.*variable|Serialized"; then \
 		end=$$(date +%s); echo "Nim Step 3 (variable) took $$((end-start))s"; \
-	else \
+		else \
 		end=$$(date +%s); echo "Nim Step 3 (variable) took $$((end-start))s"; \
 		echo "ERROR: Step 3 failed"; \
 		cat /tmp/nim_step3_var.log | tail -50; \
@@ -96,18 +96,18 @@ test-cross-fixed8: install-deps
 		echo "Compiling Nim test (fixed8) with optimizations..."; \
 		nim c -d:release -d:testFixed8 -o:target/nim_test_fixed8 $(NIM_TESTS)/test_cross_verification.nim; \
 	fi
-	@start=$$(date +%s); if ./target/nim_test_fixed8 2>&1 | tee /tmp/nim_step2_fixed8.log | grep -A 50 "Rust serialize → Nim deserialize (fixed 8-byte)" | grep -E "\[OK\]|\[FAIL\]|^Deserialized"; then \
+	@start=$$(date +%s); if ./target/nim_test_fixed8 2>&1 | tee /tmp/nim_step2_fixed8.log | grep -A 50 "Rust serialize → Nim deserialize (fixed 8-byte)" | grep -E "\[OK\]|\[FAIL\]|Deserialized"; then \
 		end=$$(date +%s); echo "Nim Step 2 (fixed8) took $$((end-start))s"; \
-	else \
+		else \
 		end=$$(date +%s); echo "Nim Step 2 (fixed8) took $$((end-start))s"; \
 		echo "ERROR: Step 2 failed - check if Rust serialization files exist"; \
 		cat /tmp/nim_step2_fixed8.log | tail -50; \
 		exit 1; \
 	fi
 	@echo "Step 3: Nim serializes data (fixed 8-byte)..."
-	@start=$$(date +%s); if ./target/nim_test_fixed8 2>&1 | tee /tmp/nim_step3_fixed8.log | grep -A 50 "Nim serialize → Rust deserialize (fixed 8-byte)" | grep -E "\[OK\]|\[FAIL\]|Created.*fixed8|^Serialized"; then \
+	@start=$$(date +%s); if ./target/nim_test_fixed8 2>&1 | tee /tmp/nim_step3_fixed8.log | grep -A 50 "Nim serialize → Rust deserialize (fixed 8-byte)" | grep -E "\[OK\]|\[FAIL\]|Created.*fixed8|Serialized"; then \
 		end=$$(date +%s); echo "Nim Step 3 (fixed8) took $$((end-start))s"; \
-	else \
+		else \
 		end=$$(date +%s); echo "Nim Step 3 (fixed8) took $$((end-start))s"; \
 		echo "ERROR: Step 3 failed"; \
 		cat /tmp/nim_step3_fixed8.log | tail -50; \

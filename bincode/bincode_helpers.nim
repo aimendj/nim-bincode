@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 # Copyright (c) Status Research & Development GmbH
 
-{.push raises: [], gcsafe.}
+{.push raises: [BincodeError], gcsafe.}
 
 import stew/endians2
 import stew/leb128
