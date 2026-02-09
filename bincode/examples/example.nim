@@ -5,7 +5,7 @@
 
 import ../nim_bincode
 
-proc main() {.raises: [BincodeError].} =
+proc main() =
   let original = @[byte(1), 2, 3, 4, 5]
   echo "Original bytes: ", original
 

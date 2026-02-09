@@ -33,47 +33,37 @@ const RUST_BINCODE_MARKER_U32* = 0xfc'u8
 const RUST_BINCODE_MARKER_U64* = 0xfd'u8
 const RUST_BINCODE_MARKER_U128* = 0xfe'u8
 
-proc checkSizeLimit*(
-    size: uint64, limit: uint64 = BINCODE_SIZE_LIMIT
-) {.raises: [BincodeError].} =
+proc checkSizeLimit*(size: uint64, limit: uint64 = BINCODE_SIZE_LIMIT) =
   ## Check if size exceeds the specified limit.
   ## Raises `BincodeError` if size exceeds limit.
   if size > limit:
     raise newException(BincodeError, "Data exceeds size limit")
 
-proc checkMinimumSize*(
-    dataLen: int, required: int = LENGTH_PREFIX_SIZE
-) {.raises: [BincodeError].} =
+proc checkMinimumSize*(dataLen: int, required: int = LENGTH_PREFIX_SIZE) =
   ## Check if data length meets minimum requirement.
   ## Raises `BincodeError` if data is insufficient.
   if dataLen < required:
     raise newException(BincodeError, "Insufficient data for length prefix")
 
-proc checkLengthLimit*(
-    length: uint64, limit: uint64 = BINCODE_SIZE_LIMIT
-) {.raises: [BincodeError].} =
+proc checkLengthLimit*(length: uint64, limit: uint64 = BINCODE_SIZE_LIMIT) =
   ## Check if decoded length exceeds the specified limit.
   ## Raises `BincodeError` if length exceeds limit.
   if length > limit:
     raise newException(BincodeError, "Length exceeds size limit")
 
-proc checkSufficientData*(
-    dataLen: int, prefixSize: int, length: int
-) {.raises: [BincodeError].} =
+proc checkSufficientData*(dataLen: int, prefixSize: int, length: int) =
   ## Check if data has sufficient bytes for the decoded length.
   ## Raises `BincodeError` if insufficient data.
   if dataLen < prefixSize + length:
     raise newException(BincodeError, "Insufficient data for content")
 
-proc checkNoTrailingBytes*(
-    dataLen: int, prefixSize: int, length: int
-) {.raises: [BincodeError].} =
+proc checkNoTrailingBytes*(dataLen: int, prefixSize: int, length: int) =
   ## Check if there are no trailing bytes after the expected data.
   ## Raises `BincodeError` if trailing bytes detected.
   if dataLen != prefixSize + length:
     raise newException(BincodeError, "Trailing bytes detected")
 
-func zigzagEncode*(value: int64): uint64 {.raises: [].} =
+func zigzagEncode*(value: int64): uint64 =
   ## Encode a signed integer using zigzag encoding for LEB128.
   ## Zigzag encoding maps signed integers to unsigned integers:
   ## 0 -> 0, -1 -> 1, 1 -> 2, -2 -> 3, 2 -> 4, etc.
@@ -82,14 +72,14 @@ func zigzagEncode*(value: int64): uint64 {.raises: [].} =
   else:
     ((not value.uint64) shl 1) or 1
 
-func zigzagDecode*(value: uint64): int64 {.raises: [].} =
+func zigzagDecode*(value: uint64): int64 =
   ## Decode a zigzag-encoded unsigned integer back to a signed integer.
   if (value and 1) == 0:
     (value shr 1).int64
   else:
     not ((value shr 1).int64)
 
-func encodeLength*(length: uint64, config: BincodeConfig): seq[byte] {.raises: [].} =
+func encodeLength*(length: uint64, config: BincodeConfig): seq[byte] =
   ## Encode a length value according to the config's integer encoding.
   if config.intSize > 0:
     case config.byteOrder
@@ -138,9 +128,7 @@ func encodeLength*(length: uint64, config: BincodeConfig): seq[byte] {.raises: [
           bytes[7],
         ]
 
-proc decodeLength*(
-    data: openArray[byte], config: BincodeConfig
-): (uint64, int) {.raises: [BincodeError].} =
+proc decodeLength*(data: openArray[byte], config: BincodeConfig): (uint64, int) =
   ## Decode a length value according to the config's integer encoding.
   ## Returns (length, bytes_consumed).
   ##
@@ -225,9 +213,7 @@ proc decodeLength*(
         raise newException(BincodeError, "Failed to decode variable-length integer")
       return (decoded.val, decoded.len.int)
 
-proc serialize*(
-    data: openArray[byte], config: BincodeConfig = standard()
-): seq[byte] {.raises: [BincodeError].} =
+proc serialize*(data: openArray[byte], config: BincodeConfig = standard()): seq[byte] =
   ## Serialize a byte sequence to bincode format.
   ##
   ## Format depends on config:
@@ -252,7 +238,7 @@ proc serialize*(
 
 proc deserialize*(
     data: openArray[byte], config: BincodeConfig = standard()
-): seq[byte] {.raises: [BincodeError].} =
+): seq[byte] =
   ## Deserialize bincode-encoded data to a byte sequence.
   ##
   ## Format depends on config:

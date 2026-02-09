@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 # Copyright (c) Status Research & Development GmbH
 
-{.push raises: [], gcsafe.}
+{.push raises: [BincodeError, IOError, OSError], gcsafe.}
 
 import unittest
 import os
@@ -50,7 +50,7 @@ const DeserializeTestFilesFixed8 {.used.}: array[14, string] = [
 
 # Get expected data for deserialization tests
 # Large arrays (4GB+) are created lazily to avoid slow upfront allocation
-proc getExpectedData(): seq[seq[byte]] {.raises: [].} =
+proc getExpectedData(): seq[seq[byte]] =
   var data100 = newSeq[byte](100)
   for i in 0 ..< data100.len:
     data100[i] = byte(1)
@@ -76,7 +76,7 @@ proc getExpectedData(): seq[seq[byte]] {.raises: [].} =
     ]
 
 # Lazy creation of large arrays (only when actually needed for serialization)
-proc getLargeArray(index: int): seq[byte] {.raises: [].} =
+proc getLargeArray(index: int): seq[byte] =
   case index
   of 12: # Just below 2^32 threshold
     return newSeq[byte](4294967295)
@@ -89,7 +89,7 @@ proc getLargeArray(index: int): seq[byte] {.raises: [].} =
 # Helper Functions
 # ============================================================================
 
-proc formatVecForLog(data: openArray[byte]): string {.raises: [].} =
+proc formatVecForLog(data: openArray[byte]): string =
   ## Format a vector for logging - show full vector if <= 20 bytes, otherwise show size only
   if data.len > 20:
     return $data.len & " bytes"
@@ -98,7 +98,7 @@ proc formatVecForLog(data: openArray[byte]): string {.raises: [].} =
 
 proc serializeToFile(
     data: openArray[byte], filename: string, config: BincodeConfig = standard()
-): void {.raises: [BincodeError, IOError, OSError].} =
+): void =
   ## Serialize data and write to file for Rust to read
   let serialized = serialize(data, config)
   createDir(TestDataDir)
@@ -108,7 +108,7 @@ proc serializeToFile(
 
 proc deserializeFromFile(
     filename: string, config: BincodeConfig = standard()
-): seq[byte] {.raises: [BincodeError, IOError].} =
+): seq[byte] =
   ## Read file and deserialize data that was serialized by Rust
   let filePath = TestDataDir / filename
   let serialized = cast[seq[byte]](readFile(filePath))

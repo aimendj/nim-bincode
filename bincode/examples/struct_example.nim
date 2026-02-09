@@ -78,7 +78,7 @@ proc bytesToPerson(data: openArray[byte]): Person =
 
   return person
 
-proc main() {.raises: [BincodeError].} =
+proc main() =
   echo "=== Struct Example (like Rust direct_example.rs) ===\n"
 
   let person = Person(name: "Alice", age: 30'u32, email: "alice@example.com")
