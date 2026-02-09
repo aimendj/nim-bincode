@@ -33,8 +33,7 @@ func standard*(): BincodeConfig =
   ##
   ## This matches the current default behavior for backward compatibility.
   ##
-  BincodeConfig(byteOrder: LittleEndian, intSize: 8,
-      sizeLimit: BINCODE_SIZE_LIMIT)
+  BincodeConfig(byteOrder: LittleEndian, intSize: 8, sizeLimit: BINCODE_SIZE_LIMIT)
 
 func withLittleEndian*(config: BincodeConfig): BincodeConfig =
   ## Set byte order to little-endian.
@@ -48,8 +47,7 @@ func withBigEndian*(config: BincodeConfig): BincodeConfig =
   output.byteOrder = BigEndian
   output
 
-func withFixedIntEncoding*(config: BincodeConfig,
-    size: int = 8): BincodeConfig =
+func withFixedIntEncoding*(config: BincodeConfig, size: int = 8): BincodeConfig =
   ## Set integer encoding to fixed-size.
   ##
   ## `size` specifies the number of bytes to use (1, 2, 4, or 8).
