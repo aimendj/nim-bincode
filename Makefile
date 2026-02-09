@@ -156,6 +156,7 @@ format:
 	@echo "Formatting Nim files..."
 	nph nim/nim_bincode.nim
 	nph nim/bincode_common.nim
+	nph nim/bincode_helpers.nim
 	nph nim/bincode_config.nim
 	nph nim/examples/example.nim
 	nph nim/examples/struct_example.nim
@@ -169,6 +170,7 @@ format-check:
 	@echo "Checking Nim file formatting..."
 	@nph --check nim/nim_bincode.nim && \
 	 nph --check nim/bincode_common.nim && \
+	 nph --check nim/bincode_helpers.nim && \
 	 nph --check nim/bincode_config.nim && \
 	 nph --check nim/examples/example.nim && \
 	 nph --check nim/examples/struct_example.nim && \

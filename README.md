@@ -186,8 +186,9 @@ nph --diff nim/nim_bincode.nim
 ├── Cargo.toml          # Rust test harness configuration
 ├── Makefile            # Build and test automation
 ├── nim/
-│   ├── nim_bincode.nim # Main public API (re-exports from common/helpers)
+│   ├── nim_bincode.nim # Main public API (re-exports from bincode_common and bincode_helpers)
 │   ├── bincode_common.nim # Core byte serialization/deserialization
+│   ├── bincode_helpers.nim # String and integer serialization/deserialization
 │   ├── bincode_config.nim # Configuration types and builders
 │   ├── examples/
 │   │   ├── example.nim
