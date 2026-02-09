@@ -234,7 +234,7 @@ proc serialize*(data: openArray[byte], config: BincodeConfig = standard()): seq[
   copyMem(output[0].addr, lengthPrefix[0].addr, lengthPrefix.len)
   if data.len > 0:
     copyMem(output[lengthPrefix.len].addr, data[0].unsafeAddr, data.len)
-  return output
+  output
 
 proc deserialize*(
     data: openArray[byte], config: BincodeConfig = standard()
@@ -274,6 +274,6 @@ proc deserialize*(
 
   checkNoTrailingBytes(data.len, prefixSize, length)
 
-  return output
+  output
 
 {.pop.}

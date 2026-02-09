@@ -41,7 +41,7 @@ proc personToBytes(p: Person): seq[byte] =
   for i in 0 ..< p.email.len:
     emailBytes[i] = byte(p.email[i])
 
-  return nameLenBytes & nameBytes & ageBytes & emailLenBytes & emailBytes
+  nameLenBytes & nameBytes & ageBytes & emailLenBytes & emailBytes
 
 proc bytesToPerson(data: openArray[byte]): Person =
   var offset = 0
@@ -76,7 +76,7 @@ proc bytesToPerson(data: openArray[byte]): Person =
       for i in 0 ..< int(emailLen):
         person.email[i] = char(data[offset + i])
 
-  return person
+  person
 
 proc main() =
   echo "=== Struct Example (like Rust direct_example.rs) ===\n"

@@ -33,7 +33,7 @@ proc serializeString*(s: string, config: BincodeConfig = standard()): seq[byte] 
   if s.len > 0:
     copyMem(utf8Bytes[0].addr, s[0].unsafeAddr, s.len)
 
-  return serialize(utf8Bytes, config)
+  serialize(utf8Bytes, config)
 
 proc deserializeString*(
     data: openArray[byte], config: BincodeConfig = standard()
@@ -61,7 +61,7 @@ proc deserializeString*(
 
   var output = newString(bytes.len)
   copyMem(output[0].addr, bytes[0].addr, bytes.len)
-  return output
+  output
 
 proc serializeInt32*(value: int32, config: BincodeConfig = standard()): seq[byte] =
   ## Serialize an int32 to bincode format.
@@ -92,7 +92,7 @@ proc serializeInt32*(value: int32, config: BincodeConfig = standard()): seq[byte
     let zigzag = zigzagEncode(value.int64)
     let buf = toBytes(zigzag, Leb128)
     intBytes = @(buf.toOpenArray())
-  return serialize(intBytes, config)
+  serialize(intBytes, config)
 
 proc deserializeInt32*(
     data: openArray[byte], config: BincodeConfig = standard()
@@ -154,7 +154,7 @@ proc serializeUint32*(value: uint32, config: BincodeConfig = standard()): seq[by
   else:
     let buf = toBytes(value.uint64, Leb128)
     intBytes = @(buf.toOpenArray())
-  return serialize(intBytes, config)
+  serialize(intBytes, config)
 
 proc deserializeUint32*(
     data: openArray[byte], config: BincodeConfig = standard()
@@ -216,7 +216,7 @@ proc serializeInt64*(value: int64, config: BincodeConfig = standard()): seq[byte
     let zigzag = zigzagEncode(value)
     let buf = toBytes(zigzag, Leb128)
     intBytes = @(buf.toOpenArray())
-  return serialize(intBytes, config)
+  serialize(intBytes, config)
 
 proc deserializeInt64*(
     data: openArray[byte], config: BincodeConfig = standard()

@@ -33,22 +33,23 @@ func standard*(): BincodeConfig =
   ##
   ## This matches the current default behavior for backward compatibility.
   ##
-  return
-    BincodeConfig(byteOrder: LittleEndian, intSize: 8, sizeLimit: BINCODE_SIZE_LIMIT)
+  BincodeConfig(byteOrder: LittleEndian, intSize: 8,
+      sizeLimit: BINCODE_SIZE_LIMIT)
 
 func withLittleEndian*(config: BincodeConfig): BincodeConfig =
   ## Set byte order to little-endian.
   var output = config
   output.byteOrder = LittleEndian
-  return output
+  output
 
 func withBigEndian*(config: BincodeConfig): BincodeConfig =
   ## Set byte order to big-endian.
   var output = config
   output.byteOrder = BigEndian
-  return output
+  output
 
-func withFixedIntEncoding*(config: BincodeConfig, size: int = 8): BincodeConfig =
+func withFixedIntEncoding*(config: BincodeConfig,
+    size: int = 8): BincodeConfig =
   ## Set integer encoding to fixed-size.
   ##
   ## `size` specifies the number of bytes to use (1, 2, 4, or 8).
@@ -62,7 +63,7 @@ func withFixedIntEncoding*(config: BincodeConfig, size: int = 8): BincodeConfig 
       raise
         newException(BincodeConfigError, "Invalid fixedIntSize: must be 1, 2, 4, or 8")
     output.intSize = size
-  return output
+  output
 
 func withVariableIntEncoding*(config: BincodeConfig): BincodeConfig =
   ## Set integer encoding to variable-length (LEB128).
@@ -70,12 +71,12 @@ func withVariableIntEncoding*(config: BincodeConfig): BincodeConfig =
   ## This sets intSize to 0 to indicate variable encoding.
   var output = config
   output.intSize = 0
-  return output
+  output
 
 func withLimit*(config: BincodeConfig, limit: uint64): BincodeConfig =
   ## Set the maximum size limit for serialized data.
   var output = config
   output.sizeLimit = limit
-  return output
+  output
 
 {.pop.}
