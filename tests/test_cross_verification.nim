@@ -3,8 +3,8 @@
 
 {.push raises: [BincodeError, IOError, OSError], gcsafe.}
 
-import unittest
-import os
+import std/unittest
+import std/os
 import nim_bincode
 import bincode_config
 

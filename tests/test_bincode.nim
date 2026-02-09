@@ -3,8 +3,8 @@
 
 {.push raises: [], gcsafe.}
 
-import unittest
-import strutils
+import std/unittest
+import std/strutils
 import nim_bincode
 import bincode_config
 
