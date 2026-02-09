@@ -3,8 +3,7 @@
 
 {.push raises: [BincodeError], gcsafe.}
 
-import stew/endians2
-import stew/leb128
+import stew/[endians2, leb128]
 import bincode_config
 
 ## Core bincode serialization/deserialization for byte sequences.
