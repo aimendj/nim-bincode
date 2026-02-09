@@ -1,9 +1,9 @@
 .PHONY: help build examples test test-nim test-format test-cross test-cross-variable test-cross-fixed8 test-markers clean format format-check install-deps
 
 # Variables
-NIM_SRC = nim
-NIM_EXAMPLES = nim/examples
-NIM_TESTS = nim/tests
+NIM_SRC = bincode
+NIM_EXAMPLES = bincode/examples
+NIM_TESTS = tests
 
 # Default target
 help:
@@ -154,29 +154,29 @@ test-nim: install-deps
 # Format all Nim files
 format:
 	@echo "Formatting Nim files..."
-	nph nim/nim_bincode.nim
-	nph nim/bincode_common.nim
-	nph nim/bincode_helpers.nim
-	nph nim/bincode_config.nim
-	nph nim/examples/example.nim
-	nph nim/examples/struct_example.nim
-	nph nim/tests/test_bincode.nim
-	nph nim/tests/test_bincode_config.nim
-	nph nim/tests/test_cross_verification.nim
+	nph bincode/nim_bincode.nim
+	nph bincode/bincode_common.nim
+	nph bincode/bincode_helpers.nim
+	nph bincode/bincode_config.nim
+	nph bincode/examples/example.nim
+	nph bincode/examples/struct_example.nim
+	nph tests/test_bincode.nim
+	nph tests/test_bincode_config.nim
+	nph tests/test_cross_verification.nim
 	@echo "Formatting complete."
 
 # Check if Nim files are formatted
 format-check:
 	@echo "Checking Nim file formatting..."
-	@nph --check nim/nim_bincode.nim && \
-	 nph --check nim/bincode_common.nim && \
-	 nph --check nim/bincode_helpers.nim && \
-	 nph --check nim/bincode_config.nim && \
-	 nph --check nim/examples/example.nim && \
-	 nph --check nim/examples/struct_example.nim && \
-	 nph --check nim/tests/test_bincode.nim && \
-	 nph --check nim/tests/test_bincode_config.nim && \
-	 nph --check nim/tests/test_cross_verification.nim && \
+	@nph --check bincode/nim_bincode.nim && \
+	 nph --check bincode/bincode_common.nim && \
+	 nph --check bincode/bincode_helpers.nim && \
+	 nph --check bincode/bincode_config.nim && \
+	 nph --check bincode/examples/example.nim && \
+	 nph --check bincode/examples/struct_example.nim && \
+	 nph --check tests/test_bincode.nim && \
+	 nph --check tests/test_bincode_config.nim && \
+	 nph --check tests/test_cross_verification.nim && \
 	 echo "All files are properly formatted." || \
 	 (echo "Some files are not formatted. Run 'make format' to fix." && exit 1)
 
@@ -185,8 +185,8 @@ clean:
 	@echo "Cleaning build artifacts..."
 	cargo clean
 	rm -rf bin/
-	rm -f nim/examples/example nim/examples/struct_example
-	rm -f nim/tests/test_bincode nim/tests/test_bincode_config
+	rm -f bincode/examples/example bincode/examples/struct_example
+	rm -f tests/test_bincode tests/test_bincode_config
 	rm -f target/nim_test_variable target/nim_test_fixed8
 	rm -rf nimcache/
 	@echo "Clean complete."

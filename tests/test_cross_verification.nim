@@ -2,8 +2,8 @@
 
 import unittest
 import os
-import ../nim_bincode
-import ../bincode_config
+import nim_bincode
+import bincode_config
 
 const TestDataDir = "target/test_data"
 

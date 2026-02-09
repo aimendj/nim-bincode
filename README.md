@@ -62,10 +62,10 @@ First, install dependencies:
 make install-deps
 ```
 
-The `nim/nim_bincode.nim` module provides the native Nim implementation:
+The `bincode/nim_bincode.nim` module provides the native Nim implementation:
 
 ```nim
-import nim/nim_bincode
+import bincode/nim_bincode
 
 # Serialize bytes
 let data = @[byte(1), 2, 3, 4, 5]
@@ -170,13 +170,13 @@ make format-check
 
 ```bash
 # Format a single file
-nph nim/nim_bincode.nim
+nph bincode/nim_bincode.nim
 
 # Format an entire directory
-nph nim/
+nph bincode/
 
 # Show diff of formatting changes
-nph --diff nim/nim_bincode.nim
+nph --diff bincode/nim_bincode.nim
 ```
 
 ## Project Structure
@@ -185,17 +185,21 @@ nph --diff nim/nim_bincode.nim
 .
 ├── Cargo.toml          # Rust test harness configuration
 ├── Makefile            # Build and test automation
-├── nim/
+├── bincode/
 │   ├── nim_bincode.nim # Main public API (re-exports from bincode_common and bincode_helpers)
 │   ├── bincode_common.nim # Core byte serialization/deserialization
 │   ├── bincode_helpers.nim # String and integer serialization/deserialization
 │   ├── bincode_config.nim # Configuration types and builders
-│   ├── examples/
-│   │   ├── example.nim
-│   │   └── struct_example.nim
-│   └── tests/          # Nim tests (including cross-verification)
+│   └── examples/
+│       ├── example.nim
+│       └── struct_example.nim
 ├── nim-stew/           # Git submodule (stew dependency)
-├── tests/              # Rust tests for format and cross-verification
+├── tests/              # All tests (Rust and Nim, including cross-verification)
+│   ├── bincode_format.rs
+│   ├── cross_verification.rs
+│   ├── test_bincode.nim
+│   ├── test_bincode_config.nim
+│   └── test_cross_verification.nim
 └── README.md
 ```
 
@@ -211,7 +215,7 @@ nph --diff nim/nim_bincode.nim
 ## Notes
 
 - The implementation serializes/deserializes `Vec<u8>` (byte vectors) for generic binary data handling
-- Uses a bincode v2-compatible configuration; the exact wire format is exercised and verified in the Rust tests in `tests/` and the Nim tests in `nim/tests/`
+- Uses a bincode v2-compatible configuration; the exact wire format is exercised and verified in the Rust and Nim tests in `tests/`
 
 ## License
 

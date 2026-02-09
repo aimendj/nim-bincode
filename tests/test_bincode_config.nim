@@ -1,8 +1,8 @@
 {.push raises: [], gcsafe.}
 
 import unittest
-import ../bincode_config
-import ../nim_bincode
+import bincode_config
+import nim_bincode
 
 suite "Bincode Config":
   test "standard config has correct defaults":
