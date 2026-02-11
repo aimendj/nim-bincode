@@ -20,6 +20,7 @@ help:
 	@echo "  make format         - Format all Nim files"
 	@echo "  make format-check   - Check if Nim files are formatted"
 	@echo "  make install-deps   - Install/vendor Nim dependencies (stew)"
+	@echo "  make benchmark      - Run performance benchmarks (Rust vs Nim)"
 	@echo "  make clean          - Clean build artifacts"
 
 # Install/vendor Nim dependencies
@@ -180,6 +181,27 @@ format-check:
 	 echo "All files are properly formatted." || \
 	 (echo "Some files are not formatted. Run 'make format' to fix." && exit 1)
 
+# Run performance benchmarks (Rust vs Nim)
+benchmark: install-deps
+	@echo "=== Performance Benchmarks: Rust vs Nim ==="
+	@echo ""
+	@echo "Building Rust benchmark..."
+	@cargo build --release --bin benchmark 2>&1 | tail -3
+	@echo ""
+	@echo "Building Nim benchmark..."
+	@if [ ! -f target/benchmark_nim ] || [ $(NIM_TESTS)/benchmark.nim -nt target/benchmark_nim ]; then \
+		echo "Compiling Nim benchmark with optimizations..."; \
+		nim c -d:release -o:target/benchmark_nim $(NIM_TESTS)/benchmark.nim; \
+	fi
+	@echo ""
+	@echo "=== Rust Benchmarks ==="
+	@./target/release/benchmark 2>/dev/null || cargo run --release --bin benchmark 2>&1 | grep -v "^    " || echo "Rust benchmark failed"
+	@echo ""
+	@echo "=== Nim Benchmarks ==="
+	@./target/benchmark_nim
+	@echo ""
+	@echo "=== Benchmark comparison complete ==="
+
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
@@ -188,5 +210,6 @@ clean:
 	rm -f bincode/examples/example bincode/examples/struct_example
 	rm -f tests/test_bincode tests/test_bincode_config
 	rm -f target/nim_test_variable target/nim_test_fixed8
+	rm -f target/benchmark_nim
 	rm -rf nimcache/
 	@echo "Clean complete."
