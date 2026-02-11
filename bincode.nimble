@@ -11,3 +11,9 @@ bin = @["nim_bincode"]
 
 requires "nim >= 2.2.4"
 requires "unittest2"
+
+# Tasks
+
+task test, "Run all Nim tests":
+  exec "nim c -r tests/test_bincode_config.nim"
+  exec "nim c -r tests/test_bincode.nim"
