@@ -32,31 +32,31 @@ const RUST_BINCODE_MARKER_U32* = 0xfc'u8
 const RUST_BINCODE_MARKER_U64* = 0xfd'u8
 const RUST_BINCODE_MARKER_U128* = 0xfe'u8
 
-proc checkSizeLimit*(size: uint64, limit: uint64 = BINCODE_SIZE_LIMIT) =
+func checkSizeLimit*(size: uint64, limit: uint64 = BINCODE_SIZE_LIMIT) =
   ## Check if size exceeds the specified limit.
   ## Raises `BincodeError` if size exceeds limit.
   if size > limit:
     raise newException(BincodeError, "Data exceeds size limit")
 
-proc checkMinimumSize*(dataLen: int, required: int = LENGTH_PREFIX_SIZE) =
+func checkMinimumSize*(dataLen: int, required: int = LENGTH_PREFIX_SIZE) =
   ## Check if data length meets minimum requirement.
   ## Raises `BincodeError` if data is insufficient.
   if dataLen < required:
     raise newException(BincodeError, "Insufficient data for length prefix")
 
-proc checkLengthLimit*(length: uint64, limit: uint64 = BINCODE_SIZE_LIMIT) =
+func checkLengthLimit*(length: uint64, limit: uint64 = BINCODE_SIZE_LIMIT) =
   ## Check if decoded length exceeds the specified limit.
   ## Raises `BincodeError` if length exceeds limit.
   if length > limit:
     raise newException(BincodeError, "Length exceeds size limit")
 
-proc checkSufficientData*(dataLen: int, prefixSize: int, length: int) =
+func checkSufficientData*(dataLen: int, prefixSize: int, length: int) =
   ## Check if data has sufficient bytes for the decoded length.
   ## Raises `BincodeError` if insufficient data.
   if dataLen < prefixSize + length:
     raise newException(BincodeError, "Insufficient data for content")
 
-proc checkNoTrailingBytes*(dataLen: int, prefixSize: int, length: int) =
+func checkNoTrailingBytes*(dataLen: int, prefixSize: int, length: int) =
   ## Check if there are no trailing bytes after the expected data.
   ## Raises `BincodeError` if trailing bytes detected.
   if dataLen != prefixSize + length:
@@ -127,7 +127,7 @@ func encodeLength*(length: uint64, config: BincodeConfig): seq[byte] =
           bytes[7],
         ]
 
-proc decodeLength*(data: openArray[byte], config: BincodeConfig): (uint64, int) =
+func decodeLength*(data: openArray[byte], config: BincodeConfig): (uint64, int) =
   ## Decode a length value according to the config's integer encoding.
   ## Returns (length, bytes_consumed).
   ##
@@ -212,7 +212,7 @@ proc decodeLength*(data: openArray[byte], config: BincodeConfig): (uint64, int) 
         raise newException(BincodeError, "Failed to decode variable-length integer")
       return (decoded.val, decoded.len.int)
 
-proc serialize*(data: openArray[byte], config: BincodeConfig = standard()): seq[byte] =
+func serialize*(data: openArray[byte], config: BincodeConfig = standard()): seq[byte] =
   ## Serialize a byte sequence to bincode format.
   ##
   ## Format depends on config:
@@ -235,7 +235,7 @@ proc serialize*(data: openArray[byte], config: BincodeConfig = standard()): seq[
     copyMem(output[lengthPrefix.len].addr, data[0].unsafeAddr, data.len)
   output
 
-proc deserialize*(
+func deserialize*(
     data: openArray[byte], config: BincodeConfig = standard()
 ): seq[byte] =
   ## Deserialize bincode-encoded data to a byte sequence.

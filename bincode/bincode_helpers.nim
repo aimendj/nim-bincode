@@ -14,7 +14,7 @@ import bincode_common
 ## - String serialization/deserialization (UTF-8)
 ## - Integer serialization/deserialization (int32, uint32, int64)
 
-proc serializeString*(s: string, config: BincodeConfig = standard()): seq[byte] =
+func serializeString*(s: string, config: BincodeConfig = standard()): seq[byte] =
   ## Serialize a string to bincode format.
   ##
   ## Format depends on config:
@@ -34,7 +34,7 @@ proc serializeString*(s: string, config: BincodeConfig = standard()): seq[byte] 
 
   serialize(utf8Bytes, config)
 
-proc deserializeString*(
+func deserializeString*(
     data: openArray[byte], config: BincodeConfig = standard()
 ): string =
   ## Deserialize bincode-encoded data to a string.
@@ -62,7 +62,7 @@ proc deserializeString*(
   copyMem(output[0].addr, bytes[0].addr, bytes.len)
   output
 
-proc serializeInt32*(value: int32, config: BincodeConfig = standard()): seq[byte] =
+func serializeInt32*(value: int32, config: BincodeConfig = standard()): seq[byte] =
   ## Serialize an int32 to bincode format.
   ##
   ## Wraps the int32 bytes in Vec<u8> format.
@@ -93,7 +93,7 @@ proc serializeInt32*(value: int32, config: BincodeConfig = standard()): seq[byte
     intBytes = @(buf.toOpenArray())
   serialize(intBytes, config)
 
-proc deserializeInt32*(
+func deserializeInt32*(
     data: openArray[byte], config: BincodeConfig = standard()
 ): int32 =
   ## Deserialize bincode-encoded data to an int32.
@@ -125,7 +125,7 @@ proc deserializeInt32*(
       raise newException(BincodeError, "Cannot deserialize int32: value out of range")
     return zigzagDecoded.int32
 
-proc serializeUint32*(value: uint32, config: BincodeConfig = standard()): seq[byte] =
+func serializeUint32*(value: uint32, config: BincodeConfig = standard()): seq[byte] =
   ## Serialize a uint32 to bincode format.
   ##
   ## Wraps the uint32 bytes in Vec<u8> format.
@@ -155,7 +155,7 @@ proc serializeUint32*(value: uint32, config: BincodeConfig = standard()): seq[by
     intBytes = @(buf.toOpenArray())
   serialize(intBytes, config)
 
-proc deserializeUint32*(
+func deserializeUint32*(
     data: openArray[byte], config: BincodeConfig = standard()
 ): uint32 =
   ## Deserialize bincode-encoded data to a uint32.
@@ -186,7 +186,7 @@ proc deserializeUint32*(
       raise newException(BincodeError, "Cannot deserialize uint32: value out of range")
     return decoded.val.uint32
 
-proc serializeInt64*(value: int64, config: BincodeConfig = standard()): seq[byte] =
+func serializeInt64*(value: int64, config: BincodeConfig = standard()): seq[byte] =
   ## Serialize an int64 to bincode format.
   ##
   ## Wraps the int64 bytes in Vec<u8> format.
@@ -217,7 +217,7 @@ proc serializeInt64*(value: int64, config: BincodeConfig = standard()): seq[byte
     intBytes = @(buf.toOpenArray())
   serialize(intBytes, config)
 
-proc deserializeInt64*(
+func deserializeInt64*(
     data: openArray[byte], config: BincodeConfig = standard()
 ): int64 =
   ## Deserialize bincode-encoded data to an int64.

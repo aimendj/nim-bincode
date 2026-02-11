@@ -47,7 +47,7 @@ const DeserializeTestFilesFixed8 {.used.}: array[12, string] = [
 ]
 
 # Get expected data for deserialization tests
-proc getExpectedData(): seq[seq[byte]] =
+func getExpectedData(): seq[seq[byte]] =
   var data100 = newSeq[byte](100)
   for i in 0 ..< data100.len:
     data100[i] = byte(1)
@@ -74,7 +74,7 @@ proc getExpectedData(): seq[seq[byte]] =
 # Helper Functions
 # ============================================================================
 
-proc formatVecForLog(data: openArray[byte]): string =
+func formatVecForLog(data: openArray[byte]): string =
   ## Format a vector for logging - show full vector if <= 20 bytes, otherwise show size only
   if data.len > 20:
     return $data.len & " bytes"

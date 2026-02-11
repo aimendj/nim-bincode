@@ -1,16 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 # Copyright (c) Status Research & Development GmbH
 
-{.push raises: [], gcsafe.}
+{.push raises: [BincodeError, BincodeConfigError], gcsafe.}
 
 import ../nim_bincode
+import ../bincode_config
 
 type Person* = object
   name*: string
   age*: uint32
   email*: string
 
-proc personToBytes(p: Person): seq[byte] =
+func personToBytes(p: Person): seq[byte] {.raises: [].} =
   var nameLenBytes =
     @[
       byte(p.name.len and 0xFF),
@@ -43,7 +44,7 @@ proc personToBytes(p: Person): seq[byte] =
 
   nameLenBytes & nameBytes & ageBytes & emailLenBytes & emailBytes
 
-proc bytesToPerson(data: openArray[byte]): Person =
+func bytesToPerson(data: openArray[byte]): Person {.raises: [].} =
   var offset = 0
   var person: Person
 

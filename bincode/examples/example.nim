@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 # Copyright (c) Status Research & Development GmbH
 
-{.push raises: [], gcsafe.}
+{.push raises: [BincodeError, BincodeConfigError], gcsafe.}
 
 import ../nim_bincode
+import ../bincode_config
 
 proc main() =
   let original = @[byte(1), 2, 3, 4, 5]
