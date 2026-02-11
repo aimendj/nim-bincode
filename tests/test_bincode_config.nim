@@ -101,7 +101,8 @@ suite "Config with Serialization":
     let smallData = @[byte(1), 2, 3]
     check smallData.len.uint64 <= config.sizeLimit
     let serialized = serialize(smallData, config)
-    check smallData.len.uint64 <= config.sizeLimit
+    let deserialized = deserialize(serialized, config)
+    check smallData == deserialized
 
   test "custom size limit raises on exceed":
     let config = standard().withLimit(10'u64)
