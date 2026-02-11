@@ -62,7 +62,7 @@ func checkNoTrailingBytes*(dataLen: int, prefixSize: int, length: int) =
   if dataLen != prefixSize + length:
     raise newException(BincodeError, "Trailing bytes detected")
 
-func zigzagEncode*(value: int64): uint64 =
+func zigzagEncode*(value: int64): uint64 {.raises: [].} =
   ## Encode a signed integer using zigzag encoding for LEB128.
   ## Zigzag encoding maps signed integers to unsigned integers:
   ## 0 -> 0, -1 -> 1, 1 -> 2, -2 -> 3, 2 -> 4, etc.
@@ -71,14 +71,14 @@ func zigzagEncode*(value: int64): uint64 =
   else:
     ((not value.uint64) shl 1) or 1
 
-func zigzagDecode*(value: uint64): int64 =
+func zigzagDecode*(value: uint64): int64 {.raises: [].} =
   ## Decode a zigzag-encoded unsigned integer back to a signed integer.
   if (value and 1) == 0:
     (value shr 1).int64
   else:
     not ((value shr 1).int64)
 
-func encodeLength*(length: uint64, config: BincodeConfig): seq[byte] =
+func encodeLength*(length: uint64, config: BincodeConfig): seq[byte] {.raises: [].} =
   ## Encode a length value according to the config's integer encoding.
   if config.intSize > 0:
     case config.byteOrder

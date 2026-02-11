@@ -25,7 +25,7 @@ type
 
 const BINCODE_SIZE_LIMIT* = 65536'u64 # Default 64 KiB limit (matches bincode v2 default)
 
-func standard*(): BincodeConfig =
+func standard*(): BincodeConfig {.raises: [].} =
   ## Create a standard bincode configuration with default settings:
   ## - Little-endian byte order
   ## - Fixed integer encoding (8-byte integers by default)
@@ -35,13 +35,13 @@ func standard*(): BincodeConfig =
   ##
   BincodeConfig(byteOrder: LittleEndian, intSize: 8, sizeLimit: BINCODE_SIZE_LIMIT)
 
-func withLittleEndian*(config: BincodeConfig): BincodeConfig =
+func withLittleEndian*(config: BincodeConfig): BincodeConfig {.raises: [].} =
   ## Set byte order to little-endian.
   var output = config
   output.byteOrder = LittleEndian
   output
 
-func withBigEndian*(config: BincodeConfig): BincodeConfig =
+func withBigEndian*(config: BincodeConfig): BincodeConfig {.raises: [].} =
   ## Set byte order to big-endian.
   var output = config
   output.byteOrder = BigEndian
@@ -62,7 +62,7 @@ func withFixedIntEncoding*(config: BincodeConfig, size: int = 8): BincodeConfig 
     output.intSize = size
   output
 
-func withVariableIntEncoding*(config: BincodeConfig): BincodeConfig =
+func withVariableIntEncoding*(config: BincodeConfig): BincodeConfig {.raises: [].} =
   ## Set integer encoding to variable-length (LEB128).
   ##
   ## This sets intSize to 0 to indicate variable encoding.
@@ -70,7 +70,7 @@ func withVariableIntEncoding*(config: BincodeConfig): BincodeConfig =
   output.intSize = 0
   output
 
-func withLimit*(config: BincodeConfig, limit: uint64): BincodeConfig =
+func withLimit*(config: BincodeConfig, limit: uint64): BincodeConfig {.raises: [].} =
   ## Set the maximum size limit for serialized data.
   var output = config
   output.sizeLimit = limit
