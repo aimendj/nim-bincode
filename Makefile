@@ -186,7 +186,7 @@ benchmark: install-deps
 	@echo "=== Performance Benchmarks: Rust vs Nim ==="
 	@echo ""
 	@echo "Building Rust benchmark..."
-	@cargo build --release --bin benchmark 2>&1 | tail -3
+	@cargo build --release --test benchmark 2>&1 | tail -3
 	@echo ""
 	@echo "Building Nim benchmark..."
 	@if [ ! -f target/benchmark_nim ] || [ $(NIM_TESTS)/benchmark.nim -nt target/benchmark_nim ]; then \
@@ -195,7 +195,7 @@ benchmark: install-deps
 	fi
 	@echo ""
 	@echo "=== Rust Benchmarks ==="
-	@./target/release/benchmark 2>/dev/null || cargo run --release --bin benchmark 2>&1 | grep -v "^    " || echo "Rust benchmark failed"
+	@cargo test --release --test benchmark -- --nocapture 2>&1 | grep -v "^    " | grep -v "^test benchmark" | grep -v "^running" | grep -v "^test result:" || echo "Rust benchmark failed"
 	@echo ""
 	@echo "=== Nim Benchmarks ==="
 	@./target/benchmark_nim

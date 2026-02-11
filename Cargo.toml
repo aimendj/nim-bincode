@@ -5,7 +5,3 @@ edition = "2021"
 
 [dependencies]
 bincode = { version = "2.0", features = ["derive"] }
-
-[[bin]]
-name = "benchmark"
-path = "tests/benchmark.rs"

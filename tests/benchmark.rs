@@ -69,7 +69,8 @@ fn run_benchmark(name: &str, data: &[u8], iterations: usize) {
         (data.len() as f64 / 1024.0 / 1024.0) / deserialize_time_fixed);
 }
 
-fn main() {
+#[test]
+fn benchmark() {
     println!("Rust Bincode Performance Benchmarks");
     println!("====================================");
     
