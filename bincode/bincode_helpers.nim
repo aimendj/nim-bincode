@@ -131,7 +131,7 @@ func deserializeInt32*(
       copyMem(paddedBytes[0].addr, bytes[0].addr, size)
       # Sign-extend if MSB (last byte) is negative
       if (bytes[size - 1] and 0x80'u8) != 0:
-        for i in size..7:
+        for i in size .. 7:
           paddedBytes[i] = 0xFF'u8
       let uintValue = fromBytesLE(uint64, paddedBytes)
       return cast[int32](uintValue)
@@ -139,7 +139,7 @@ func deserializeInt32*(
       copyMem(paddedBytes[8 - size].addr, bytes[0].addr, size)
       # Sign-extend if MSB (first byte) is negative
       if (bytes[0] and 0x80'u8) != 0:
-        for i in 0..(8 - size - 1):
+        for i in 0 .. (8 - size - 1):
           paddedBytes[i] = 0xFF'u8
       let uintValue = fromBytesBE(uint64, paddedBytes)
       return cast[int32](uintValue)
@@ -285,7 +285,7 @@ func deserializeInt64*(
       copyMem(paddedBytes[0].addr, bytes[0].addr, size)
       # Sign-extend if MSB (last byte) is negative
       if (bytes[size - 1] and 0x80'u8) != 0:
-        for i in size..7:
+        for i in size .. 7:
           paddedBytes[i] = 0xFF'u8
       let uintValue = fromBytesLE(uint64, paddedBytes)
       return cast[int64](uintValue)
@@ -293,7 +293,7 @@ func deserializeInt64*(
       copyMem(paddedBytes[8 - size].addr, bytes[0].addr, size)
       # Sign-extend if MSB (first byte) is negative
       if (bytes[0] and 0x80'u8) != 0:
-        for i in 0..(8 - size - 1):
+        for i in 0 .. (8 - size - 1):
           paddedBytes[i] = 0xFF'u8
       let uintValue = fromBytesBE(uint64, paddedBytes)
       return cast[int64](uintValue)

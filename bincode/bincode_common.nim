@@ -217,7 +217,9 @@ func decodeLength*(
     elif firstByte == 0xff'u8:
       # 0xff is not a valid marker byte in Rust bincode v2
       # Only markers 0xfb-0xfe are valid
-      raise newException(BincodeError, "Invalid marker byte 0xff in variable-length encoding")
+      raise newException(
+        BincodeError, "Invalid marker byte 0xff in variable-length encoding"
+      )
     else:
       # Values >= 0xfa and < 0xfb should not occur in Rust bincode encoding
       # Standard LEB128 encoding (for values that don't use markers)

@@ -129,15 +129,21 @@ fn deserialize_from_file_fixed8(filename: &str) -> Result<Vec<u8>, Box<dyn std::
 
 /// Get test cases for serialization (data, filename pairs)
 /// The prefix parameter determines the filename prefix (e.g., "rust_fixed", "rust_var", "rust_fixed8")
+/// Get test cases for serialization tests.
+/// 
+/// **IMPORTANT**: This function must return test cases in the same order as `get_expected_data()`.
+/// The indices must match exactly, otherwise cross-verification tests will silently fail.
+/// 
+/// Order: [1,2,3,4,5], [], [0,255,128,64], "Hello, World!", [42], "Test with émojis 🚀", [1;100], ...
 fn get_serialize_test_cases(prefix: &str) -> Vec<(Vec<u8>, String)> {
     vec![
         (vec![1u8, 2, 3, 4, 5], format!("{}_001.bin", prefix)),
         (vec![], format!("{}_002.bin", prefix)),
         (vec![0u8, 255, 128, 64], format!("{}_003.bin", prefix)),
-        (vec![1u8; 100], format!("{}_004.bin", prefix)),
-        ("Hello, World!".as_bytes().to_vec(), format!("{}_005.bin", prefix)),
-        (vec![42u8], format!("{}_006.bin", prefix)),
-        ("Test with émojis 🚀".as_bytes().to_vec(), format!("{}_007.bin", prefix)),
+        ("Hello, World!".as_bytes().to_vec(), format!("{}_004.bin", prefix)),
+        (vec![42u8], format!("{}_005.bin", prefix)),
+        ("Test with émojis 🚀".as_bytes().to_vec(), format!("{}_006.bin", prefix)),
+        (vec![1u8; 100], format!("{}_007.bin", prefix)),
         (vec![0u8; 20 * 1024], format!("{}_008.bin", prefix)), // 20kB
         (vec![0u8; 250], format!("{}_009.bin", prefix)), // Just below 251 threshold (uses single byte)
         (vec![0u8; 251], format!("{}_010.bin", prefix)), // Just at 251 threshold (uses 0xfb + u16 LE)
