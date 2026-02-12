@@ -1,16 +1,19 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 # Copyright (c) Status Research & Development GmbH
 
-{.push raises: [BincodeError, BincodeConfigError], gcsafe.}
+{.push raises: [], gcsafe.}
 
+import faststreams # Uses: memoryOutput, getOutput
 import ../nim_bincode
 import ../bincode_config
 
-proc main() =
+proc main() {.raises: [BincodeError, IOError].} =
   let original = @[byte(1), 2, 3, 4, 5]
   echo "Original bytes: ", original
 
-  let serialized = serialize(original)
+  var stream = memoryOutput()
+  serialize(stream, original)
+  let serialized = stream.getOutput()
   echo "Serialized length: ", serialized.len
   echo "Serialized bytes: ", serialized
 
@@ -21,7 +24,9 @@ proc main() =
   let text = "Hello, bincode!"
   echo "\nOriginal string: ", text
 
-  let serializedText = serializeString(text)
+  var textStream = memoryOutput()
+  serializeString(textStream, text)
+  let serializedText = textStream.getOutput()
   echo "Serialized length: ", serializedText.len
   echo "Serialized Text: ", serializedText
 

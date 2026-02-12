@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 # Copyright (c) Status Research & Development GmbH
 
-{.push raises: [BincodeError], gcsafe.}
+{.push raises: [], gcsafe.}
 
+import faststreams # Uses: memoryOutput, OutputStreamHandle, write, getOutput
 import stew/[endians2, leb128]
 import bincode_config
 
@@ -32,37 +33,47 @@ const RUST_BINCODE_MARKER_U32* = 0xfc'u8
 const RUST_BINCODE_MARKER_U64* = 0xfd'u8
 const RUST_BINCODE_MARKER_U128* = 0xfe'u8
 
-func checkSizeLimit*(size: uint64, limit: uint64 = BINCODE_SIZE_LIMIT) =
+func checkSizeLimit*(
+    size: uint64, limit: uint64 = BINCODE_SIZE_LIMIT
+) {.raises: [BincodeError].} =
   ## Check if size exceeds the specified limit.
   ## Raises `BincodeError` if size exceeds limit.
   if size > limit:
     raise newException(BincodeError, "Data exceeds size limit")
 
-func checkMinimumSize*(dataLen: int, required: int = LENGTH_PREFIX_SIZE) =
+func checkMinimumSize*(
+    dataLen: int, required: int = LENGTH_PREFIX_SIZE
+) {.raises: [BincodeError].} =
   ## Check if data length meets minimum requirement.
   ## Raises `BincodeError` if data is insufficient.
   if dataLen < required:
     raise newException(BincodeError, "Insufficient data for length prefix")
 
-func checkLengthLimit*(length: uint64, limit: uint64 = BINCODE_SIZE_LIMIT) =
+func checkLengthLimit*(
+    length: uint64, limit: uint64 = BINCODE_SIZE_LIMIT
+) {.raises: [BincodeError].} =
   ## Check if decoded length exceeds the specified limit.
   ## Raises `BincodeError` if length exceeds limit.
   if length > limit:
     raise newException(BincodeError, "Length exceeds size limit")
 
-func checkSufficientData*(dataLen: int, prefixSize: int, length: int) =
+func checkSufficientData*(
+    dataLen: int, prefixSize: int, length: int
+) {.raises: [BincodeError].} =
   ## Check if data has sufficient bytes for the decoded length.
   ## Raises `BincodeError` if insufficient data.
   if dataLen < prefixSize + length:
     raise newException(BincodeError, "Insufficient data for content")
 
-func checkNoTrailingBytes*(dataLen: int, prefixSize: int, length: int) =
+func checkNoTrailingBytes*(
+    dataLen: int, prefixSize: int, length: int
+) {.raises: [BincodeError].} =
   ## Check if there are no trailing bytes after the expected data.
   ## Raises `BincodeError` if trailing bytes detected.
   if dataLen != prefixSize + length:
     raise newException(BincodeError, "Trailing bytes detected")
 
-func zigzagEncode*(value: int64): uint64 {.raises: [].} =
+func zigzagEncode*(value: int64): uint64 =
   ## Encode a signed integer using zigzag encoding for LEB128.
   ## Zigzag encoding maps signed integers to unsigned integers:
   ## 0 -> 0, -1 -> 1, 1 -> 2, -2 -> 3, 2 -> 4, etc.
@@ -71,63 +82,62 @@ func zigzagEncode*(value: int64): uint64 {.raises: [].} =
   else:
     ((not value.uint64) shl 1) or 1
 
-func zigzagDecode*(value: uint64): int64 {.raises: [].} =
+func zigzagDecode*(value: uint64): int64 =
   ## Decode a zigzag-encoded unsigned integer back to a signed integer.
   if (value and 1) == 0:
     (value shr 1).int64
   else:
     not ((value shr 1).int64)
 
-func encodeLength*(length: uint64, config: BincodeConfig): seq[byte] {.raises: [].} =
-  ## Encode a length value according to the config's integer encoding.
+proc encodeLength*(
+    stream: OutputStreamHandle, length: uint64, config: BincodeConfig
+) {.raises: [IOError].} =
+  ## Encode a length value according to the config's integer encoding and write to stream.
   if config.intSize > 0:
     case config.byteOrder
     of LittleEndian:
       let bytes = toBytesLE(length)
-      return
-        @[
-          bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]
-        ]
+      stream.write(bytes.toOpenArray(0, bytes.high))
     of BigEndian:
       let bytes = toBytesBE(length)
-      return
-        @[
-          bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]
-        ]
+      stream.write(bytes.toOpenArray(0, bytes.high))
   else:
     # Variable encoding: Rust bincode uses special encoding
     # Note: RUST_BINCODE_MARKER_U128 (0xfe) is not used in encoding since length is uint64 (max 2^64-1)
     if length < RUST_BINCODE_THRESHOLD_U16:
       # Single byte: the value itself
-      return @[length.byte]
+      stream.write(length.byte)
     elif length < RUST_BINCODE_THRESHOLD_U32:
       # 0xfb + u16 little-endian
       let u16Value = length.uint16
       let bytes = toBytesLE(u16Value)
-      return @[RUST_BINCODE_MARKER_U16, bytes[0], bytes[1]]
+      stream.write(RUST_BINCODE_MARKER_U16)
+      stream.write(bytes.toOpenArray(0, bytes.high))
     elif length < RUST_BINCODE_THRESHOLD_U64:
       # 0xfc + u32 little-endian
       let u32Value = length.uint32
       let bytes = toBytesLE(u32Value)
-      return @[RUST_BINCODE_MARKER_U32, bytes[0], bytes[1], bytes[2], bytes[3]]
+      stream.write(RUST_BINCODE_MARKER_U32)
+      stream.write(bytes.toOpenArray(0, bytes.high))
     else:
       # 0xfd + u64 little-endian
       # Note: We never use 0xfe (u128) in encoding since length is uint64 (max 2^64-1)
       let bytes = toBytesLE(length)
-      return
-        @[
-          RUST_BINCODE_MARKER_U64,
-          bytes[0],
-          bytes[1],
-          bytes[2],
-          bytes[3],
-          bytes[4],
-          bytes[5],
-          bytes[6],
-          bytes[7],
-        ]
+      stream.write(RUST_BINCODE_MARKER_U64)
+      stream.write(bytes.toOpenArray(0, bytes.high))
 
-func decodeLength*(data: openArray[byte], config: BincodeConfig): (uint64, int) =
+proc encodeLength*(
+    length: uint64, config: BincodeConfig
+): seq[byte] {.raises: [IOError].} =
+  ## Encode a length value according to the config's integer encoding.
+  ## Returns a sequence (for backward compatibility).
+  var stream = memoryOutput()
+  encodeLength(stream, length, config)
+  stream.getOutput()
+
+func decodeLength*(
+    data: openArray[byte], config: BincodeConfig
+): (uint64, int) {.raises: [BincodeError].} =
   ## Decode a length value according to the config's integer encoding.
   ## Returns (length, bytes_consumed).
   ##
@@ -212,8 +222,12 @@ func decodeLength*(data: openArray[byte], config: BincodeConfig): (uint64, int) 
         raise newException(BincodeError, "Failed to decode variable-length integer")
       return (decoded.val, decoded.len.int)
 
-func serialize*(data: openArray[byte], config: BincodeConfig = standard()): seq[byte] =
-  ## Serialize a byte sequence to bincode format.
+proc serialize*(
+    stream: OutputStreamHandle,
+    data: openArray[byte],
+    config: BincodeConfig = standard(),
+) {.raises: [BincodeError, IOError].} =
+  ## Serialize a byte sequence to bincode format and write to stream.
   ##
   ## Format depends on config:
   ## - Fixed encoding: [8-byte u64 length] + [data bytes]
@@ -222,22 +236,19 @@ func serialize*(data: openArray[byte], config: BincodeConfig = standard()): seq[
   ## Byte order (little-endian/big-endian) applies to fixed encoding.
   ##
   ## Raises `BincodeError` if data exceeds the configured size limit.
+  ## Raises `IOError` if stream write fails.
   ##
   ## Empty sequences serialize to a zero-length prefix + no data bytes.
 
   checkSizeLimit(data.len.uint64, config.sizeLimit)
 
-  let lengthPrefix = encodeLength(data.len.uint64, config)
-
-  var output = newSeq[byte](lengthPrefix.len + data.len)
-  copyMem(output[0].addr, lengthPrefix[0].addr, lengthPrefix.len)
+  encodeLength(stream, data.len.uint64, config)
   if data.len > 0:
-    copyMem(output[lengthPrefix.len].addr, data[0].unsafeAddr, data.len)
-  output
+    stream.write(data)
 
 func deserialize*(
     data: openArray[byte], config: BincodeConfig = standard()
-): seq[byte] =
+): seq[byte] {.raises: [BincodeError].} =
   ## Deserialize bincode-encoded data to a byte sequence.
   ##
   ## Format depends on config:

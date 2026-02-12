@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 # Copyright (c) Status Research & Development GmbH
 
-{.push raises: [BincodeError, BincodeConfigError], gcsafe.}
+{.push raises: [], gcsafe.}
 
+import faststreams # Uses: memoryOutput, getOutput
 import ../nim_bincode
 import ../bincode_config
 
@@ -11,7 +12,7 @@ type Person* = object
   age*: uint32
   email*: string
 
-func personToBytes(p: Person): seq[byte] {.raises: [].} =
+func personToBytes(p: Person): seq[byte] =
   var nameLenBytes =
     @[
       byte(p.name.len and 0xFF),
@@ -44,7 +45,7 @@ func personToBytes(p: Person): seq[byte] {.raises: [].} =
 
   nameLenBytes & nameBytes & ageBytes & emailLenBytes & emailBytes
 
-func bytesToPerson(data: openArray[byte]): Person {.raises: [].} =
+func bytesToPerson(data: openArray[byte]): Person =
   var offset = 0
   var person: Person
 
@@ -79,7 +80,7 @@ func bytesToPerson(data: openArray[byte]): Person {.raises: [].} =
 
   person
 
-proc main() =
+proc main() {.raises: [BincodeError, IOError].} =
   echo "=== Struct Example (like Rust direct_example.rs) ===\n"
 
   let person = Person(name: "Alice", age: 30'u32, email: "alice@example.com")
@@ -109,7 +110,9 @@ proc main() =
   let data = @[byte(1), 2, 3, 4, 5, 100, 200, 255]
   echo "\nOriginal bytes: ", data
 
-  let encodedBytes = serialize(data)
+  var dataStream = memoryOutput()
+  serialize(dataStream, data)
+  let encodedBytes = dataStream.getOutput()
   echo "Encoded length: ", encodedBytes.len, " bytes"
 
   let decodedBytes2 = deserialize(encodedBytes)

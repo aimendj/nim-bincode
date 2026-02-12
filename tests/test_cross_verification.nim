@@ -1,12 +1,21 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 # Copyright (c) Status Research & Development GmbH
 
-{.push raises: [BincodeError, IOError, OSError], gcsafe.}
+{.push raises: [], gcsafe.}
 
+import faststreams # Uses: memoryOutput, fileOutput, getOutput, close
 import unittest2
 import std/os
 import nim_bincode
 import bincode_config
+
+# Helper function to serialize using streaming API and return seq[byte]
+proc serializeToSeq(
+    data: openArray[byte], config: BincodeConfig = standard()
+): seq[byte] {.raises: [BincodeError, IOError].} =
+  var stream = memoryOutput()
+  serialize(stream, data, config)
+  stream.getOutput()
 
 const TestDataDir = "target/test_data"
 
@@ -83,17 +92,18 @@ func formatVecForLog(data: openArray[byte]): string =
 
 proc serializeToFile(
     data: openArray[byte], filename: string, config: BincodeConfig = standard()
-): void =
-  ## Serialize data and write to file for Rust to read
-  let serialized = serialize(data, config)
+) {.raises: [BincodeError, IOError, OSError].} =
+  ## Serialize data and write directly to file for Rust to read (no intermediate allocation)
   createDir(TestDataDir)
   let filePath = TestDataDir / filename
-  writeFile(filePath, cast[string](serialized))
+  var output = fileOutput(filePath, fmWrite)
+  serialize(output, data, config)
+  output.close()
   echo "Serialized ", formatVecForLog(data), " to ", filename
 
 proc deserializeFromFile(
     filename: string, config: BincodeConfig = standard()
-): seq[byte] =
+): seq[byte] {.raises: [BincodeError, IOError, OSError].} =
   ## Read file and deserialize data that was serialized by Rust
   let filePath = TestDataDir / filename
   let serialized = cast[seq[byte]](readFile(filePath))
@@ -202,7 +212,6 @@ when RUN_VARIABLE_TESTS:
       for i in 0 ..< deserialized.len:
         check deserialized[i] == byte(0)
 
-
 when RUN_VARIABLE_TESTS:
   suite "Nim serialize → Rust deserialize (variable encoding)":
     test "serialize all test cases":
@@ -219,7 +228,7 @@ when RUN_VARIABLE_TESTS:
       let config = standard().withVariableIntEncoding()
 
       for original in testCases:
-        let nimSerialized = serialize(original, config)
+        let nimSerialized = serializeToSeq(original, config)
         let nimDeserialized = deserialize(nimSerialized, config)
 
         # Roundtrip must preserve data
@@ -230,19 +239,19 @@ when RUN_VARIABLE_TESTS:
 
       # Test single byte encoding (< 251): length 250 should be single byte
       let data250 = newSeq[byte](250)
-      let serialized250 = serialize(data250, config)
+      let serialized250 = serializeToSeq(data250, config)
       check serialized250[0] == 250'u8 # No marker, just the value itself
       check serialized250.len == 251 # 1 byte length + 250 data
 
       # Test 0xfb marker (251-65535): length 251 should use 0xfb + u16 LE
       let data251 = newSeq[byte](251)
-      let serialized251 = serialize(data251, config)
+      let serialized251 = serializeToSeq(data251, config)
       check serialized251[0] == 0xfb'u8
       check serialized251.len == 254 # 3 bytes (0xfb + u16) + 251 data
 
       # Test 0xfc marker (65536+): length 65536 should use 0xfc + u32 LE
       let data65536 = newSeq[byte](65536)
-      let serialized65536 = serialize(data65536, config)
+      let serialized65536 = serializeToSeq(data65536, config)
       check serialized65536[0] == 0xfc'u8
       check serialized65536.len == 65541 # 5 bytes (0xfc + u32) + 65536 data
 
@@ -345,7 +354,6 @@ when RUN_FIXED8_TESTS:
       for i in 0 ..< deserialized.len:
         check deserialized[i] == byte(0)
 
-
 when RUN_FIXED8_TESTS:
   suite "Nim serialize → Rust deserialize (fixed 8-byte)":
     test "serialize all test cases":
@@ -362,7 +370,7 @@ when RUN_FIXED8_TESTS:
       let config = standard().withFixedIntEncoding(8)
 
       for original in testCases:
-        let nimSerialized = serialize(original, config)
+        let nimSerialized = serializeToSeq(original, config)
         let nimDeserialized = deserialize(nimSerialized, config)
 
         # Roundtrip must preserve data

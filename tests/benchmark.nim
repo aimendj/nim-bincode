@@ -1,22 +1,29 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 # Copyright (c) Status Research & Development GmbH
 
-{.push raises: [BincodeError, BincodeConfigError], gcsafe.}
+{.push raises: [], gcsafe.}
 
+import faststreams  # Uses: memoryOutput, getOutput
 import std/[times, strformat]
 import nim_bincode
 import bincode_config
 
+# Helper function to serialize using streaming API and return seq[byte]
+proc serializeToSeq(data: openArray[byte], config: BincodeConfig = standard()): seq[byte] {.raises: [BincodeError, IOError].} =
+  var stream = memoryOutput()
+  serialize(stream, data, config)
+  stream.getOutput()
+
 func variableConfig(limit: uint64 = 65536'u64): BincodeConfig =
   standard().withVariableIntEncoding().withLimit(limit)
 
-func fixed8Config(limit: uint64 = 65536'u64): BincodeConfig =
+func fixed8Config(limit: uint64 = 65536'u64): BincodeConfig {.raises: [BincodeConfigError].} =
   standard().withFixedIntEncoding(8).withLimit(limit)
 
-proc benchmarkSerialize(data: seq[byte], config: BincodeConfig, iterations: int): float =
+proc benchmarkSerialize(data: seq[byte], config: BincodeConfig, iterations: int): float {.raises: [BincodeError, IOError].} =
   let start = cpuTime()
   for _ in 0 ..< iterations:
-    discard serialize(data, config)
+    discard serializeToSeq(data, config)
   let elapsed = cpuTime() - start
   elapsed / iterations.float
 
@@ -27,7 +34,7 @@ proc benchmarkDeserialize(encoded: seq[byte], config: BincodeConfig, iterations:
   let elapsed = cpuTime() - start
   elapsed / iterations.float
 
-proc runBenchmark(name: string, data: seq[byte], iterations: int) =
+proc runBenchmark(name: string, data: seq[byte], iterations: int) {.raises: [BincodeError, IOError, BincodeConfigError].} =
   echo "\n=== ", name, " (", data.len, " bytes, ", iterations, " iterations) ==="
   
   # Calculate appropriate limit (data size + overhead for encoding)
@@ -35,7 +42,7 @@ proc runBenchmark(name: string, data: seq[byte], iterations: int) =
   
   # Variable encoding
   let configVar = variableConfig(limit)
-  let encodedVar = serialize(data, configVar)
+  let encodedVar = serializeToSeq(data, configVar)
   
   let serializeTimeVar = benchmarkSerialize(data, configVar, iterations)
   let deserializeTimeVar = benchmarkDeserialize(encodedVar, configVar, iterations)
@@ -49,7 +56,7 @@ proc runBenchmark(name: string, data: seq[byte], iterations: int) =
   
   # Fixed 8-byte encoding
   let configFixed = fixed8Config(limit)
-  let encodedFixed = serialize(data, configFixed)
+  let encodedFixed = serializeToSeq(data, configFixed)
   
   let serializeTimeFixed = benchmarkSerialize(data, configFixed, iterations)
   let deserializeTimeFixed = benchmarkDeserialize(encodedFixed, configFixed, iterations)
@@ -61,7 +68,7 @@ proc runBenchmark(name: string, data: seq[byte], iterations: int) =
   let throughputDesFixed = (data.len.float / 1024.0 / 1024.0) / deserializeTimeFixed
   echo &"  Throughput:  {throughputSerFixed:.2f} MB/s (serialize), {throughputDesFixed:.2f} MB/s (deserialize)"
 
-proc main() =
+proc main() {.raises: [BincodeError, IOError, BincodeConfigError].} =
   echo "Nim Bincode Performance Benchmarks"
   echo "=================================="
   

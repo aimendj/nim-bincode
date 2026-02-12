@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 # Copyright (c) Status Research & Development GmbH
 
-{.push raises: [BincodeError], gcsafe.}
+{.push raises: [], gcsafe.}
 
+import faststreams # Uses: OutputStreamHandle, write
 import stew/[endians2, leb128]
 import bincode_config
 import bincode_common
@@ -14,8 +15,10 @@ import bincode_common
 ## - String serialization/deserialization (UTF-8)
 ## - Integer serialization/deserialization (int32, uint32, int64)
 
-func serializeString*(s: string, config: BincodeConfig = standard()): seq[byte] =
-  ## Serialize a string to bincode format.
+proc serializeString*(
+    stream: OutputStreamHandle, s: string, config: BincodeConfig = standard()
+) {.raises: [BincodeError, IOError].} =
+  ## Serialize a string to bincode format and write to stream.
   ##
   ## Format depends on config:
   ## - Fixed encoding: [8-byte u64 length] + [UTF-8 bytes]
@@ -25,18 +28,23 @@ func serializeString*(s: string, config: BincodeConfig = standard()): seq[byte] 
   ## Unicode characters are handled correctly (multi-byte UTF-8 sequences).
   ##
   ## Raises `BincodeError` if UTF-8 byte length exceeds the configured size limit.
+  ## Raises `IOError` if stream write fails.
   ##
   ## Empty strings serialize to a zero-length prefix + no data bytes.
 
-  var utf8Bytes = newSeq[byte](s.len)
-  if s.len > 0:
-    copyMem(utf8Bytes[0].addr, s[0].unsafeAddr, s.len)
+  checkSizeLimit(s.len.uint64, config.sizeLimit)
 
-  serialize(utf8Bytes, config)
+  # Write length prefix directly to stream
+  encodeLength(stream, s.len.uint64, config)
+
+  # Write string bytes directly to stream (no intermediate allocation)
+  if s.len > 0:
+    # Strings in Nim are UTF-8, so we can write the underlying bytes directly
+    stream.write(s.toOpenArray(0, s.high))
 
 func deserializeString*(
     data: openArray[byte], config: BincodeConfig = standard()
-): string =
+): string {.raises: [BincodeError].} =
   ## Deserialize bincode-encoded data to a string.
   ##
   ## Format depends on config:
@@ -62,8 +70,10 @@ func deserializeString*(
   copyMem(output[0].addr, bytes[0].addr, bytes.len)
   output
 
-func serializeInt32*(value: int32, config: BincodeConfig = standard()): seq[byte] =
-  ## Serialize an int32 to bincode format.
+proc serializeInt32*(
+    stream: OutputStreamHandle, value: int32, config: BincodeConfig = standard()
+) {.raises: [IOError].} =
+  ## Serialize an int32 to bincode format and write to stream.
   ##
   ## Wraps the int32 bytes in Vec<u8> format.
   ## Format depends on config:
@@ -72,7 +82,6 @@ func serializeInt32*(value: int32, config: BincodeConfig = standard()): seq[byte
   ##
   ## Byte order applies to fixed encoding.
 
-  var intBytes: seq[byte]
   if config.intSize > 0:
     let size = config.intSize
     let bytes =
@@ -81,21 +90,31 @@ func serializeInt32*(value: int32, config: BincodeConfig = standard()): seq[byte
         toBytesLE(value.int64.uint64)
       of BigEndian:
         toBytesBE(value.int64.uint64)
-    intBytes = newSeq[byte](size)
+
+    # Write length prefix directly to stream
+    encodeLength(stream, size.uint64, config)
+
+    # Write int bytes directly to stream (no intermediate seq allocation)
     case config.byteOrder
     of LittleEndian:
-      copyMem(intBytes[0].addr, bytes[0].addr, size)
+      stream.write(bytes.toOpenArray(0, size - 1))
     of BigEndian:
-      copyMem(intBytes[0].addr, bytes[8 - size].addr, size)
+      stream.write(bytes.toOpenArray(8 - size, 7))
   else:
+    # Variable encoding: LEB128
     let zigzag = zigzagEncode(value.int64)
     let buf = toBytes(zigzag, Leb128)
-    intBytes = @(buf.toOpenArray())
-  serialize(intBytes, config)
+    let leb128Len = buf.len
+
+    # Write length prefix directly to stream
+    encodeLength(stream, leb128Len.uint64, config)
+
+    # Write LEB128 bytes directly to stream (no intermediate seq allocation)
+    stream.write(buf.toOpenArray())
 
 func deserializeInt32*(
     data: openArray[byte], config: BincodeConfig = standard()
-): int32 =
+): int32 {.raises: [BincodeError].} =
   ## Deserialize bincode-encoded data to an int32.
   ##
   ## Expects Vec<u8> format.
@@ -125,8 +144,10 @@ func deserializeInt32*(
       raise newException(BincodeError, "Cannot deserialize int32: value out of range")
     return zigzagDecoded.int32
 
-func serializeUint32*(value: uint32, config: BincodeConfig = standard()): seq[byte] =
-  ## Serialize a uint32 to bincode format.
+proc serializeUint32*(
+    stream: OutputStreamHandle, value: uint32, config: BincodeConfig = standard()
+) {.raises: [IOError].} =
+  ## Serialize a uint32 to bincode format and write to stream.
   ##
   ## Wraps the uint32 bytes in Vec<u8> format.
   ## Format depends on config:
@@ -135,7 +156,6 @@ func serializeUint32*(value: uint32, config: BincodeConfig = standard()): seq[by
   ##
   ## Byte order applies to fixed encoding.
 
-  var intBytes: seq[byte]
   if config.intSize > 0:
     let size = config.intSize
     let bytes =
@@ -144,20 +164,30 @@ func serializeUint32*(value: uint32, config: BincodeConfig = standard()): seq[by
         toBytesLE(value.uint64)
       of BigEndian:
         toBytesBE(value.uint64)
-    intBytes = newSeq[byte](size)
+
+    # Write length prefix directly to stream
+    encodeLength(stream, size.uint64, config)
+
+    # Write int bytes directly to stream (no intermediate seq allocation)
     case config.byteOrder
     of LittleEndian:
-      copyMem(intBytes[0].addr, bytes[0].addr, size)
+      stream.write(bytes.toOpenArray(0, size - 1))
     of BigEndian:
-      copyMem(intBytes[0].addr, bytes[8 - size].addr, size)
+      stream.write(bytes.toOpenArray(8 - size, 7))
   else:
+    # Variable encoding: LEB128
     let buf = toBytes(value.uint64, Leb128)
-    intBytes = @(buf.toOpenArray())
-  serialize(intBytes, config)
+    let leb128Len = buf.len
+
+    # Write length prefix directly to stream
+    encodeLength(stream, leb128Len.uint64, config)
+
+    # Write LEB128 bytes directly to stream (no intermediate seq allocation)
+    stream.write(buf.toOpenArray())
 
 func deserializeUint32*(
     data: openArray[byte], config: BincodeConfig = standard()
-): uint32 =
+): uint32 {.raises: [BincodeError].} =
   ## Deserialize bincode-encoded data to a uint32.
   ##
   ## Expects Vec<u8> format.
@@ -186,8 +216,10 @@ func deserializeUint32*(
       raise newException(BincodeError, "Cannot deserialize uint32: value out of range")
     return decoded.val.uint32
 
-func serializeInt64*(value: int64, config: BincodeConfig = standard()): seq[byte] =
-  ## Serialize an int64 to bincode format.
+proc serializeInt64*(
+    stream: OutputStreamHandle, value: int64, config: BincodeConfig = standard()
+) {.raises: [IOError].} =
+  ## Serialize an int64 to bincode format and write to stream.
   ##
   ## Wraps the int64 bytes in Vec<u8> format.
   ## Format depends on config:
@@ -196,7 +228,6 @@ func serializeInt64*(value: int64, config: BincodeConfig = standard()): seq[byte
   ##
   ## Byte order applies to fixed encoding.
 
-  var intBytes: seq[byte]
   if config.intSize > 0:
     let size = config.intSize
     let bytes =
@@ -205,21 +236,31 @@ func serializeInt64*(value: int64, config: BincodeConfig = standard()): seq[byte
         toBytesLE(value.uint64)
       of BigEndian:
         toBytesBE(value.uint64)
-    intBytes = newSeq[byte](size)
+
+    # Write length prefix directly to stream
+    encodeLength(stream, size.uint64, config)
+
+    # Write int bytes directly to stream (no intermediate seq allocation)
     case config.byteOrder
     of LittleEndian:
-      copyMem(intBytes[0].addr, bytes[0].addr, size)
+      stream.write(bytes.toOpenArray(0, size - 1))
     of BigEndian:
-      copyMem(intBytes[0].addr, bytes[8 - size].addr, size)
+      stream.write(bytes.toOpenArray(8 - size, 7))
   else:
+    # Variable encoding: LEB128
     let zigzag = zigzagEncode(value)
     let buf = toBytes(zigzag, Leb128)
-    intBytes = @(buf.toOpenArray())
-  serialize(intBytes, config)
+    let leb128Len = buf.len
+
+    # Write length prefix directly to stream
+    encodeLength(stream, leb128Len.uint64, config)
+
+    # Write LEB128 bytes directly to stream (no intermediate seq allocation)
+    stream.write(buf.toOpenArray())
 
 func deserializeInt64*(
     data: openArray[byte], config: BincodeConfig = standard()
-): int64 =
+): int64 {.raises: [BincodeError].} =
   ## Deserialize bincode-encoded data to an int64.
   ##
   ## Expects Vec<u8> format.

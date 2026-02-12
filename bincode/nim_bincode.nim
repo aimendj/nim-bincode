@@ -3,6 +3,7 @@
 
 {.push raises: [], gcsafe.}
 
+import faststreams # Uses: memoryOutput, getOutput
 import bincode_common
 import bincode_helpers
 export bincode_common
@@ -21,7 +22,9 @@ export bincode_helpers
 
 template serializeType*[T](value: T, toBytes: proc(x: T): seq[byte]): seq[byte] =
   ## Serialize a custom type using a conversion function.
-  serialize(toBytes(value))
+  var stream = memoryOutput()
+  serialize(stream, toBytes(value))
+  stream.getOutput()
 
 template deserializeType*[T](
     data: openArray[byte], fromBytes: proc(x: openArray[byte]): T

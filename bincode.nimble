@@ -11,6 +11,7 @@ bin = @["nim_bincode"]
 
 requires "nim >= 2.2.4"
 requires "unittest2"
+requires "faststreams"
 
 # Tasks
 

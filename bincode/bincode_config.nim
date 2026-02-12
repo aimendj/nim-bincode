@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 # Copyright (c) Status Research & Development GmbH
 
-{.push raises: [BincodeConfigError], gcsafe.}
+{.push raises: [], gcsafe.}
 
 type
   BincodeConfigError* = object of CatchableError
@@ -25,7 +25,7 @@ type
 
 const BINCODE_SIZE_LIMIT* = 65536'u64 # Default 64 KiB limit (matches bincode v2 default)
 
-func standard*(): BincodeConfig {.raises: [].} =
+func standard*(): BincodeConfig =
   ## Create a standard bincode configuration with default settings:
   ## - Little-endian byte order
   ## - Fixed integer encoding (8-byte integers by default)
@@ -35,19 +35,21 @@ func standard*(): BincodeConfig {.raises: [].} =
   ##
   BincodeConfig(byteOrder: LittleEndian, intSize: 8, sizeLimit: BINCODE_SIZE_LIMIT)
 
-func withLittleEndian*(config: BincodeConfig): BincodeConfig {.raises: [].} =
+func withLittleEndian*(config: BincodeConfig): BincodeConfig =
   ## Set byte order to little-endian.
   var output = config
   output.byteOrder = LittleEndian
   output
 
-func withBigEndian*(config: BincodeConfig): BincodeConfig {.raises: [].} =
+func withBigEndian*(config: BincodeConfig): BincodeConfig =
   ## Set byte order to big-endian.
   var output = config
   output.byteOrder = BigEndian
   output
 
-func withFixedIntEncoding*(config: BincodeConfig, size: int = 8): BincodeConfig =
+func withFixedIntEncoding*(
+    config: BincodeConfig, size: int = 8
+): BincodeConfig {.raises: [BincodeConfigError].} =
   ## Set integer encoding to fixed-size.
   ##
   ## `size` specifies the number of bytes to use (1, 2, 4, or 8).
@@ -58,11 +60,12 @@ func withFixedIntEncoding*(config: BincodeConfig, size: int = 8): BincodeConfig 
     output.intSize = 0
   else:
     if size notin [1, 2, 4, 8]:
-      raise newException(BincodeConfigError, "Invalid fixedIntSize: must be 1, 2, 4, or 8")
+      raise
+        newException(BincodeConfigError, "Invalid fixedIntSize: must be 1, 2, 4, or 8")
     output.intSize = size
   output
 
-func withVariableIntEncoding*(config: BincodeConfig): BincodeConfig {.raises: [].} =
+func withVariableIntEncoding*(config: BincodeConfig): BincodeConfig =
   ## Set integer encoding to variable-length (LEB128).
   ##
   ## This sets intSize to 0 to indicate variable encoding.
@@ -70,7 +73,7 @@ func withVariableIntEncoding*(config: BincodeConfig): BincodeConfig {.raises: []
   output.intSize = 0
   output
 
-func withLimit*(config: BincodeConfig, limit: uint64): BincodeConfig {.raises: [].} =
+func withLimit*(config: BincodeConfig, limit: uint64): BincodeConfig =
   ## Set the maximum size limit for serialized data.
   var output = config
   output.sizeLimit = limit
