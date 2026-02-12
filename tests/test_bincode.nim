@@ -474,4 +474,11 @@ suite "Edge cases":
     let serialized = serializeToSeq(original)
     check original == deserialize(serialized)
 
+  test "reject invalid marker byte 0xff in variable encoding":
+    let config = standard().withVariableIntEncoding()
+    # 0xff is not a valid marker byte in Rust bincode v2 (only 0xfb-0xfe are valid)
+    let invalid = @[byte(0xFF), 0x00, 0x00]
+    expect BincodeError:
+      discard deserialize(invalid, config)
+
 {.pop.}

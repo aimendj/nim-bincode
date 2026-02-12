@@ -179,6 +179,34 @@ suite "Config with Integer Serialization":
     let deserialized = deserializeInt32(serialized, config)
     check value == deserialized
 
+  test "fixed 1-byte encoding preserves negative int32 (sign extension)":
+    let value: int32 = -42
+    let config = standard().withFixedIntEncoding(1)
+    let serialized = serializeInt32ToSeq(value, config)
+    let deserialized = deserializeInt32(serialized, config)
+    check value == deserialized
+
+  test "fixed 2-byte encoding preserves negative int32 (sign extension)":
+    let value: int32 = -42
+    let config = standard().withFixedIntEncoding(2)
+    let serialized = serializeInt32ToSeq(value, config)
+    let deserialized = deserializeInt32(serialized, config)
+    check value == deserialized
+
+  test "fixed 1-byte encoding preserves negative int32 with big-endian (sign extension)":
+    let value: int32 = -42
+    let config = standard().withFixedIntEncoding(1).withBigEndian()
+    let serialized = serializeInt32ToSeq(value, config)
+    let deserialized = deserializeInt32(serialized, config)
+    check value == deserialized
+
+  test "fixed 2-byte encoding preserves negative int32 with big-endian (sign extension)":
+    let value: int32 = -42
+    let config = standard().withFixedIntEncoding(2).withBigEndian()
+    let serialized = serializeInt32ToSeq(value, config)
+    let deserialized = deserializeInt32(serialized, config)
+    check value == deserialized
+
   test "variable encoding serializes int32":
     let value: int32 = 42
     let config = standard().withVariableIntEncoding()
@@ -217,6 +245,34 @@ suite "Config with Integer Serialization":
   test "variable encoding serializes int64":
     let value: int64 = 123456789
     let config = standard().withVariableIntEncoding()
+    let serialized = serializeInt64ToSeq(value, config)
+    let deserialized = deserializeInt64(serialized, config)
+    check value == deserialized
+
+  test "fixed 1-byte encoding preserves negative int64 (sign extension)":
+    let value: int64 = -42
+    let config = standard().withFixedIntEncoding(1)
+    let serialized = serializeInt64ToSeq(value, config)
+    let deserialized = deserializeInt64(serialized, config)
+    check value == deserialized
+
+  test "fixed 2-byte encoding preserves negative int64 (sign extension)":
+    let value: int64 = -42
+    let config = standard().withFixedIntEncoding(2)
+    let serialized = serializeInt64ToSeq(value, config)
+    let deserialized = deserializeInt64(serialized, config)
+    check value == deserialized
+
+  test "fixed 4-byte encoding preserves negative int64 (sign extension)":
+    let value: int64 = -42
+    let config = standard().withFixedIntEncoding(4)
+    let serialized = serializeInt64ToSeq(value, config)
+    let deserialized = deserializeInt64(serialized, config)
+    check value == deserialized
+
+  test "fixed 1-byte encoding preserves negative int64 with big-endian (sign extension)":
+    let value: int64 = -42
+    let config = standard().withFixedIntEncoding(1).withBigEndian()
     let serialized = serializeInt64ToSeq(value, config)
     let deserialized = deserializeInt64(serialized, config)
     check value == deserialized
