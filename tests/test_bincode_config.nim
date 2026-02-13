@@ -9,102 +9,172 @@ import bincode_config
 import nim_bincode
 
 # Helper function to serialize using streaming API and return seq[byte]
-proc serializeToSeq(
-    data: openArray[byte], config: BincodeConfig = standard()
+proc serializeToSeq[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](
+    data: openArray[byte], config: BincodeConfig[E, O, L], limit: uint64 = L
 ): seq[byte] {.raises: [BincodeError, IOError].} =
   var stream = memoryOutput()
-  serialize(stream, data, config)
+  serialize(stream, data, config, limit)
   stream.getOutput()
 
+# Convenience overload with default config
+proc serializeToSeq(
+    data: openArray[byte],
+    config: Fixed8LEConfig = standard(),
+    limit: uint64 = BINCODE_SIZE_LIMIT,
+): seq[byte] {.raises: [BincodeError, IOError].} =
+  serializeToSeq[FixedEncoding[8], LittleEndian, BINCODE_SIZE_LIMIT](
+    data, config, limit
+  )
+
 # Helper function to serialize int32 using streaming API and return seq[byte]
-proc serializeInt32ToSeq(
-    value: int32, config: BincodeConfig = standard()
-): seq[byte] {.raises: [IOError].} =
+proc serializeInt32ToSeq[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](value: int32, config: BincodeConfig[E, O, L]): seq[byte] {.raises: [IOError].} =
   var stream = memoryOutput()
   serializeInt32(stream, value, config)
   stream.getOutput()
 
-# Helper function to serialize uint32 using streaming API and return seq[byte]
-proc serializeUint32ToSeq(
-    value: uint32, config: BincodeConfig = standard()
+# Convenience overload with default config
+proc serializeInt32ToSeq(
+    value: int32, config: Fixed8LEConfig = standard()
 ): seq[byte] {.raises: [IOError].} =
+  serializeInt32ToSeq[FixedEncoding[8], LittleEndian, BINCODE_SIZE_LIMIT](value, config)
+
+# Helper function to serialize uint32 using streaming API and return seq[byte]
+proc serializeUint32ToSeq[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](value: uint32, config: BincodeConfig[E, O, L]): seq[byte] {.raises: [IOError].} =
   var stream = memoryOutput()
   serializeUint32(stream, value, config)
   stream.getOutput()
 
-# Helper function to serialize int64 using streaming API and return seq[byte]
-proc serializeInt64ToSeq(
-    value: int64, config: BincodeConfig = standard()
+# Convenience overload with default config
+proc serializeUint32ToSeq(
+    value: uint32, config: Fixed8LEConfig = standard()
 ): seq[byte] {.raises: [IOError].} =
+  serializeUint32ToSeq[FixedEncoding[8], LittleEndian, BINCODE_SIZE_LIMIT](
+    value, config
+  )
+
+# Helper function to serialize int64 using streaming API and return seq[byte]
+proc serializeInt64ToSeq[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](value: int64, config: BincodeConfig[E, O, L]): seq[byte] {.raises: [IOError].} =
   var stream = memoryOutput()
   serializeInt64(stream, value, config)
   stream.getOutput()
 
+# Convenience overload with default config
+proc serializeInt64ToSeq(
+    value: int64, config: Fixed8LEConfig = standard()
+): seq[byte] {.raises: [IOError].} =
+  serializeInt64ToSeq[FixedEncoding[8], LittleEndian, BINCODE_SIZE_LIMIT](value, config)
+
 suite "Bincode Config":
   test "standard config has correct defaults":
     let config = standard()
-    check config.byteOrder == LittleEndian
-    check config.intSize == 8
-    check config.sizeLimit == BINCODE_SIZE_LIMIT
+    check config is Fixed8LEConfig
+    # Config is now empty object, limit is compile-time constant
+    # Test that it works by using it
+    let data = @[byte(1), 2, 3]
+    let serialized = serializeToSeq(data, config)
+    let deserialized = deserialize(serialized, config)
+    check data == deserialized
 
-  test "withLittleEndian sets byte order":
+  test "withLittleEndian changes byte order":
     let config = standard().withLittleEndian()
-    check config.byteOrder == LittleEndian
+    check config is Fixed8LEConfig
+    # Test that it works
+    let data = @[byte(1), 2, 3]
+    let serialized = serializeToSeq(data, config)
+    let deserialized = deserialize(serialized, config)
+    check data == deserialized
 
-  test "withBigEndian sets byte order":
+  test "withBigEndian changes byte order":
     let config = standard().withBigEndian()
-    check config.byteOrder == BigEndian
+    check config is Fixed8BEConfig
+    # Test that it works
+    let data = @[byte(1), 2, 3]
+    let serialized = serializeToSeq(data, config)
+    let deserialized = deserialize(serialized, config)
+    check data == deserialized
 
   test "withFixedIntEncoding with default size":
     let config = standard().withFixedIntEncoding()
-    check config.intSize == 8
+    check config is Fixed8LEConfig
+    # Test that it works
+    let data = @[byte(1), 2, 3]
+    let serialized = serializeToSeq(data, config)
+    let deserialized = deserialize(serialized, config)
+    check data == deserialized
 
   test "withFixedIntEncoding with size 1":
     let config = standard().withFixedIntEncoding(1)
-    check config.intSize == 1
+    check config is Fixed1LEConfig
+    # Test that it works
+    let data = @[byte(1), 2, 3]
+    let serialized = serializeToSeq(data, config)
+    let deserialized = deserialize(serialized, config)
+    check data == deserialized
 
   test "withFixedIntEncoding with size 2":
     let config = standard().withFixedIntEncoding(2)
-    check config.intSize == 2
+    check config is Fixed2LEConfig
+    # Test that it works
+    let data = @[byte(1), 2, 3]
+    let serialized = serializeToSeq(data, config)
+    let deserialized = deserialize(serialized, config)
+    check data == deserialized
 
   test "withFixedIntEncoding with size 4":
     let config = standard().withFixedIntEncoding(4)
-    check config.intSize == 4
+    check config is Fixed4LEConfig
+    # Test that it works
+    let data = @[byte(1), 2, 3]
+    let serialized = serializeToSeq(data, config)
+    let deserialized = deserialize(serialized, config)
+    check data == deserialized
 
   test "withFixedIntEncoding with size 8":
     let config = standard().withFixedIntEncoding(8)
-    check config.intSize == 8
+    check config is Fixed8LEConfig
+    # Test that it works
+    let data = @[byte(1), 2, 3]
+    let serialized = serializeToSeq(data, config)
+    let deserialized = deserialize(serialized, config)
+    check data == deserialized
 
-  test "withFixedIntEncoding with size 0 maps to variable (intSize == 0)":
-    let config = standard().withFixedIntEncoding(0)
-    check config.intSize == 0
-
-  test "withFixedIntEncoding with invalid size raises BincodeConfigError":
-    expect BincodeConfigError:
-      discard standard().withFixedIntEncoding(3)
-    expect BincodeConfigError:
-      discard standard().withFixedIntEncoding(5)
-    expect BincodeConfigError:
-      discard standard().withFixedIntEncoding(7)
-    expect BincodeConfigError:
-      discard standard().withFixedIntEncoding(9)
-    expect BincodeConfigError:
-      discard standard().withFixedIntEncoding(-1)
-
-  test "withVariableIntEncoding sets intSize to 0":
+  test "withVariableIntEncoding creates variable encoding config":
     let config = standard().withVariableIntEncoding()
-    check config.intSize == 0
+    check config is VariableLEConfig
+    # Test that it works
+    let data = @[byte(1), 2, 3]
+    let serialized = serializeToSeq(data, config)
+    let deserialized = deserialize(serialized, config)
+    check data == deserialized
 
-  test "withLimit sets size limit":
-    let customLimit: uint64 = 1024
+  test "withLimit sets size limit (compile-time)":
+    const customLimit: uint64 = 1024
     let config = standard().withLimit(customLimit)
-    check config.sizeLimit == customLimit
+    # Config is now empty object, limit is compile-time constant
+    # Test that it works by using it
+    let data = @[byte(1), 2, 3]
+    let serialized = serializeToSeq(data, config)
+    let deserialized = deserialize(serialized, config)
+    check data == deserialized
 
   test "config builder chaining":
-    let config = standard().withBigEndian().withFixedIntEncoding(4).withLimit(2048'u64)
-    check config.byteOrder == BigEndian
-    check config.intSize == 4
-    check config.sizeLimit == 2048'u64
+    const customLimit: uint64 = 2048
+    let config =
+      standard().withBigEndian().withFixedIntEncoding(4).withLimit(customLimit)
+    check config is BincodeConfig[FixedEncoding[4], BigEndian, customLimit]
+    # Test that it works
+    let data = @[byte(1), 2, 3]
+    let serialized = serializeToSeq(data, config)
+    let deserialized = deserialize(serialized, config)
+    check data == deserialized
 
 suite "Config with Serialization":
   test "default config serializes correctly":
@@ -129,19 +199,41 @@ suite "Config with Serialization":
     check data == deserialized
     check serialized.len < 13
 
-  test "custom size limit enforces limit":
-    let config = standard().withLimit(10'u64)
+  test "custom size limit enforces limit (compile-time)":
+    const customLimit: uint64 = 10
+    let config = standard().withLimit(customLimit)
     let smallData = @[byte(1), 2, 3]
-    check smallData.len.uint64 <= config.sizeLimit
+    check smallData.len.uint64 <= customLimit
     let serialized = serializeToSeq(smallData, config)
     let deserialized = deserialize(serialized, config)
     check smallData == deserialized
 
-  test "custom size limit raises on exceed":
-    let config = standard().withLimit(10'u64)
+  test "custom size limit raises on exceed (compile-time)":
+    const customLimit: uint64 = 10
+    let config = standard().withLimit(customLimit)
     let largeData = newSeq[byte](100)
     expect BincodeError:
       discard serializeToSeq(largeData, config)
+
+  test "runtime size limit enforces limit":
+    # This test specifically tests runtime limits (when limit is calculated at runtime)
+    # In real scenarios, this would be based on dynamic data, user input, etc.
+    # Note: Even though we use a constant value here, we're testing the runtime limit API
+    let runtimeLimit: uint64 = 10 # Simulating a runtime-calculated limit
+    let config = standard() # Use default compile-time config
+    let smallData = @[byte(1), 2, 3]
+    check smallData.len.uint64 <= runtimeLimit
+    let serialized = serializeToSeq(smallData, config, limit = runtimeLimit)
+    let deserialized = deserialize(serialized, config, limit = runtimeLimit)
+    check smallData == deserialized
+
+  test "runtime size limit raises on exceed":
+    # This test specifically tests runtime limits (when limit is calculated at runtime)
+    let runtimeLimit: uint64 = 10 # Simulating a runtime-calculated limit
+    let config = standard() # Use default compile-time config
+    let largeData = newSeq[byte](100)
+    expect BincodeError:
+      discard serializeToSeq(largeData, config, limit = runtimeLimit)
 
 suite "Config with Integer Serialization":
   test "default config serializes int32":

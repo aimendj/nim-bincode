@@ -10,44 +10,86 @@ import nim_bincode
 import bincode_config
 
 # Helper function to serialize using streaming API and return seq[byte]
-proc serializeToSeq(
-    data: openArray[byte], config: BincodeConfig = standard()
+proc serializeToSeq[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](
+    data: openArray[byte], config: BincodeConfig[E, O, L], limit: uint64 = L
 ): seq[byte] {.raises: [BincodeError, IOError].} =
   var stream = memoryOutput()
-  serialize(stream, data, config)
+  serialize(stream, data, config, limit)
   stream.getOutput()
+
+# Convenience overload with default config
+proc serializeToSeq(
+    data: openArray[byte],
+    config: Fixed8LEConfig = standard(),
+    limit: uint64 = BINCODE_SIZE_LIMIT,
+): seq[byte] {.raises: [BincodeError, IOError].} =
+  serializeToSeq[FixedEncoding[8], LittleEndian, BINCODE_SIZE_LIMIT](
+    data, config, limit
+  )
 
 # Helper function to serialize string using streaming API and return seq[byte]
-proc serializeStringToSeq(
-    s: string, config: BincodeConfig = standard()
+proc serializeStringToSeq[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](
+    s: string, config: BincodeConfig[E, O, L], limit: uint64 = L
 ): seq[byte] {.raises: [BincodeError, IOError].} =
   var stream = memoryOutput()
-  serializeString(stream, s, config)
+  serializeString(stream, s, config, limit)
   stream.getOutput()
 
+# Convenience overload with default config
+proc serializeStringToSeq(
+    s: string, config: Fixed8LEConfig = standard(), limit: uint64 = BINCODE_SIZE_LIMIT
+): seq[byte] {.raises: [BincodeError, IOError].} =
+  serializeStringToSeq[FixedEncoding[8], LittleEndian, BINCODE_SIZE_LIMIT](
+    s, config, limit
+  )
+
 # Helper function to serialize int32 using streaming API and return seq[byte]
-proc serializeInt32ToSeq(
-    value: int32, config: BincodeConfig = standard()
-): seq[byte] {.raises: [IOError].} =
+proc serializeInt32ToSeq[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](value: int32, config: BincodeConfig[E, O, L]): seq[byte] {.raises: [IOError].} =
   var stream = memoryOutput()
   serializeInt32(stream, value, config)
   stream.getOutput()
 
-# Helper function to serialize uint32 using streaming API and return seq[byte]
-proc serializeUint32ToSeq(
-    value: uint32, config: BincodeConfig = standard()
+# Convenience overload with default config
+proc serializeInt32ToSeq(
+    value: int32, config: Fixed8LEConfig = standard()
 ): seq[byte] {.raises: [IOError].} =
+  serializeInt32ToSeq[FixedEncoding[8], LittleEndian, BINCODE_SIZE_LIMIT](value, config)
+
+# Helper function to serialize uint32 using streaming API and return seq[byte]
+proc serializeUint32ToSeq[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](value: uint32, config: BincodeConfig[E, O, L]): seq[byte] {.raises: [IOError].} =
   var stream = memoryOutput()
   serializeUint32(stream, value, config)
   stream.getOutput()
 
-# Helper function to serialize int64 using streaming API and return seq[byte]
-proc serializeInt64ToSeq(
-    value: int64, config: BincodeConfig = standard()
+# Convenience overload with default config
+proc serializeUint32ToSeq(
+    value: uint32, config: Fixed8LEConfig = standard()
 ): seq[byte] {.raises: [IOError].} =
+  serializeUint32ToSeq[FixedEncoding[8], LittleEndian, BINCODE_SIZE_LIMIT](
+    value, config
+  )
+
+# Helper function to serialize int64 using streaming API and return seq[byte]
+proc serializeInt64ToSeq[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](value: int64, config: BincodeConfig[E, O, L]): seq[byte] {.raises: [IOError].} =
   var stream = memoryOutput()
   serializeInt64(stream, value, config)
   stream.getOutput()
+
+# Convenience overload with default config
+proc serializeInt64ToSeq(
+    value: int64, config: Fixed8LEConfig = standard()
+): seq[byte] {.raises: [IOError].} =
+  serializeInt64ToSeq[FixedEncoding[8], LittleEndian, BINCODE_SIZE_LIMIT](value, config)
 
 # ============================================================================
 # Basic Serialization/Deserialization Tests
@@ -160,7 +202,7 @@ suite "Basic serialize/deserialize":
 
 suite "String serialization":
   test "serialize empty string":
-    let empty = ""
+    const empty = ""
     let serialized = serializeStringToSeq(empty)
     check serialized.len == 8
     check serialized == @[byte(0), 0, 0, 0, 0, 0, 0, 0]

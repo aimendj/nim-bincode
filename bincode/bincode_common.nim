@@ -4,6 +4,7 @@
 {.push raises: [], gcsafe.}
 
 import faststreams # Uses: memoryOutput, OutputStreamHandle, write, getOutput
+# Note: Deserialization optimized with copyMem for efficient memory access (faststreams-style optimization)
 import stew/[endians2, leb128]
 import bincode_config
 
@@ -89,19 +90,13 @@ func zigzagDecode*(value: uint64): int64 =
   else:
     not ((value shr 1).int64)
 
-proc encodeLength*(
-    stream: OutputStreamHandle, length: uint64, config: BincodeConfig
+proc encodeLength*[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](
+    stream: OutputStreamHandle, length: uint64, config: BincodeConfig[E, O, L]
 ) {.raises: [IOError].} =
   ## Encode a length value according to the config's integer encoding and write to stream.
-  if config.intSize > 0:
-    case config.byteOrder
-    of LittleEndian:
-      let bytes = toBytesLE(length)
-      stream.write(bytes.toOpenArray(0, bytes.high))
-    of BigEndian:
-      let bytes = toBytesBE(length)
-      stream.write(bytes.toOpenArray(0, bytes.high))
-  else:
+  when E is VariableEncoding:
     # Variable encoding: Rust bincode uses special encoding
     # Note: RUST_BINCODE_MARKER_U128 (0xfe) is not used in encoding since length is uint64 (max 2^64-1)
     if length < RUST_BINCODE_THRESHOLD_U16:
@@ -125,18 +120,27 @@ proc encodeLength*(
       let bytes = toBytesLE(length)
       stream.write(RUST_BINCODE_MARKER_U64)
       stream.write(bytes.toOpenArray(0, bytes.high))
+  elif E is FixedEncoding:
+    when O == LittleEndian:
+      let bytes = toBytesLE(length)
+      stream.write(bytes.toOpenArray(0, bytes.high))
+    elif O == BigEndian:
+      let bytes = toBytesBE(length)
+      stream.write(bytes.toOpenArray(0, bytes.high))
 
-proc encodeLength*(
-    length: uint64, config: BincodeConfig
-): seq[byte] {.raises: [IOError].} =
+proc encodeLength*[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](length: uint64, config: BincodeConfig[E, O, L]): seq[byte] {.raises: [IOError].} =
   ## Encode a length value according to the config's integer encoding.
   ## Returns a sequence (for backward compatibility).
   var stream = memoryOutput()
   encodeLength(stream, length, config)
   stream.getOutput()
 
-func decodeLength*(
-    data: openArray[byte], config: BincodeConfig
+func decodeLength*[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](
+    data: openArray[byte], config: BincodeConfig[E, O, L]
 ): (uint64, int) {.raises: [BincodeError].} =
   ## Decode a length value according to the config's integer encoding.
   ## Returns (length, bytes_consumed).
@@ -144,20 +148,19 @@ func decodeLength*(
   ## For variable encoding, Rust's bincode uses a special encoding:
   ## - Values < 16384: Standard LEB128
   ## - Values >= 16384: 0xfb marker byte + u16 little-endian (3 bytes total)
-  if config.intSize > 0:
+  when E is FixedEncoding:
     if data.len < LENGTH_PREFIX_SIZE:
       raise newException(BincodeError, "Insufficient data for length prefix")
     var lengthBytes: array[LENGTH_PREFIX_SIZE, byte]
-    for i in 0 ..< LENGTH_PREFIX_SIZE:
-      lengthBytes[i] = data[i]
-    let length =
-      case config.byteOrder
-      of LittleEndian:
-        fromBytesLE(uint64, lengthBytes)
-      of BigEndian:
-        fromBytesBE(uint64, lengthBytes)
-    return (length, LENGTH_PREFIX_SIZE)
-  else:
+    # Use copyMem for efficient copying instead of loop
+    copyMem(lengthBytes[0].addr, data[0].unsafeAddr, LENGTH_PREFIX_SIZE)
+    when O == LittleEndian:
+      let length = fromBytesLE(uint64, lengthBytes)
+      return (length, LENGTH_PREFIX_SIZE)
+    elif O == BigEndian:
+      let length = fromBytesBE(uint64, lengthBytes)
+      return (length, LENGTH_PREFIX_SIZE)
+  elif E is VariableEncoding:
     # Variable encoding: Rust bincode uses special encoding
     # Check for marker bytes: 0xfb (u16), 0xfc (u32), 0xfd (u64), 0xfe (u128)
     if data.len == 0:
@@ -173,8 +176,8 @@ func decodeLength*(
       if data.len < 3:
         raise newException(BincodeError, "Insufficient data for u16 length prefix")
       var u16Bytes: array[2, byte]
-      u16Bytes[0] = data[1]
-      u16Bytes[1] = data[2]
+      # Use copyMem for efficient copying instead of individual assignments
+      copyMem(u16Bytes[0].addr, data[1].unsafeAddr, 2)
       let length = fromBytesLE(uint16, u16Bytes).uint64
       return (length, 3)
     elif firstByte == RUST_BINCODE_MARKER_U32:
@@ -182,8 +185,8 @@ func decodeLength*(
       if data.len < 5:
         raise newException(BincodeError, "Insufficient data for u32 length prefix")
       var u32Bytes: array[4, byte]
-      for i in 0 ..< 4:
-        u32Bytes[i] = data[i + 1]
+      # Use copyMem for efficient copying instead of loop
+      copyMem(u32Bytes[0].addr, data[1].unsafeAddr, 4)
       let length = fromBytesLE(uint32, u32Bytes).uint64
       return (length, 5)
     elif firstByte == RUST_BINCODE_MARKER_U64:
@@ -191,8 +194,8 @@ func decodeLength*(
       if data.len < 9:
         raise newException(BincodeError, "Insufficient data for u64 length prefix")
       var u64Bytes: array[8, byte]
-      for i in 0 ..< 8:
-        u64Bytes[i] = data[i + 1]
+      # Use copyMem for efficient copying instead of loop
+      copyMem(u64Bytes[0].addr, data[1].unsafeAddr, 8)
       let length = fromBytesLE(uint64, u64Bytes)
       return (length, 9)
     elif firstByte == RUST_BINCODE_MARKER_U128:
@@ -210,8 +213,8 @@ func decodeLength*(
         raise newException(BincodeError, "Length value exceeds uint64 maximum (2^64-1)")
       # Extract low 8 bytes as u64
       var u64Bytes: array[8, byte]
-      for i in 0 ..< 8:
-        u64Bytes[i] = data[i + 1]
+      # Use copyMem for efficient copying instead of loop
+      copyMem(u64Bytes[0].addr, data[1].unsafeAddr, 8)
       let length = fromBytesLE(uint64, u64Bytes)
       return (length, 17)
     elif firstByte == 0xff'u8:
@@ -229,10 +232,13 @@ func decodeLength*(
         raise newException(BincodeError, "Failed to decode variable-length integer")
       return (decoded.val, decoded.len.int)
 
-proc serialize*(
+proc serialize*[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](
     stream: OutputStreamHandle,
     data: openArray[byte],
-    config: BincodeConfig = standard(),
+    config: BincodeConfig[E, O, L],
+    limit: uint64 = L,
 ) {.raises: [BincodeError, IOError].} =
   ## Serialize a byte sequence to bincode format and write to stream.
   ##
@@ -242,19 +248,35 @@ proc serialize*(
   ##
   ## Byte order (little-endian/big-endian) applies to fixed encoding.
   ##
-  ## Raises `BincodeError` if data exceeds the configured size limit.
+  ## `limit` is the maximum size limit (defaults to compile-time `L`).
+  ## Pass a runtime `limit` for dynamic limits (e.g., in benchmarks).
+  ##
+  ## Raises `BincodeError` if data exceeds the specified size limit.
   ## Raises `IOError` if stream write fails.
   ##
   ## Empty sequences serialize to a zero-length prefix + no data bytes.
 
-  checkSizeLimit(data.len.uint64, config.sizeLimit)
+  checkSizeLimit(data.len.uint64, limit)
 
   encodeLength(stream, data.len.uint64, config)
   if data.len > 0:
     stream.write(data)
 
-func deserialize*(
-    data: openArray[byte], config: BincodeConfig = standard()
+# Convenience overload with default config
+proc serialize*(
+    stream: OutputStreamHandle,
+    data: openArray[byte],
+    config: Fixed8LEConfig = standard(),
+    limit: uint64 = BINCODE_SIZE_LIMIT,
+) {.raises: [BincodeError, IOError].} =
+  serialize[FixedEncoding[8], LittleEndian, BINCODE_SIZE_LIMIT](
+    stream, data, config, limit
+  )
+
+func deserialize*[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](
+    data: openArray[byte], config: BincodeConfig[E, O, L], limit: uint64 = L
 ): seq[byte] {.raises: [BincodeError].} =
   ## Deserialize bincode-encoded data to a byte sequence.
   ##
@@ -264,18 +286,24 @@ func deserialize*(
   ##
   ## Byte order (little-endian/big-endian) applies to fixed encoding.
   ##
+  ## `limit` is the maximum size limit (defaults to compile-time `L`).
+  ## Pass a runtime `limit` for dynamic limits (e.g., in benchmarks).
+  ##
   ## Raises `BincodeError` if:
   ## - Data is insufficient for length prefix
-  ## - Length exceeds the configured size limit
+  ## - Length exceeds the specified size limit
   ## - Length value exceeds maximum int size (prevents integer overflow)
   ## - Insufficient data for content
   ## - Trailing bytes detected (all input bytes must be consumed)
+  ##
+  ## This function uses faststreams-style optimizations (efficient copyMem operations)
+  ## for improved performance, similar to how faststreams optimizes serialization.
 
   checkMinimumSize(data.len, 1)
 
   let (lengthValue, prefixSize) = decodeLength(data, config)
 
-  checkLengthLimit(lengthValue, config.sizeLimit)
+  checkLengthLimit(lengthValue, limit)
 
   # Check for integer overflow when converting uint64 to int
   # On 32-bit platforms, int.high is 2^31-1, so values > int.high would overflow
@@ -285,6 +313,7 @@ func deserialize*(
   let length = lengthValue.int
   checkSufficientData(data.len, prefixSize, length)
 
+  # Use copyMem for efficient memory copying (faststreams-style optimization)
   var output = newSeq[byte](length)
   if length > 0:
     copyMem(output[0].addr, data[prefixSize].unsafeAddr, length)
@@ -292,5 +321,13 @@ func deserialize*(
   checkNoTrailingBytes(data.len, prefixSize, length)
 
   output
+
+# Convenience overload with default config
+func deserialize*(
+    data: openArray[byte],
+    config: Fixed8LEConfig = standard(),
+    limit: uint64 = BINCODE_SIZE_LIMIT,
+): seq[byte] {.raises: [BincodeError].} =
+  deserialize[FixedEncoding[8], LittleEndian, BINCODE_SIZE_LIMIT](data, config, limit)
 
 {.pop.}

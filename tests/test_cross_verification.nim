@@ -10,12 +10,20 @@ import nim_bincode
 import bincode_config
 
 # Helper function to serialize using streaming API and return seq[byte]
-proc serializeToSeq(
-    data: openArray[byte], config: BincodeConfig = standard()
+proc serializeToSeq[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](
+    data: openArray[byte], config: BincodeConfig[E, O, L]
 ): seq[byte] {.raises: [BincodeError, IOError].} =
   var stream = memoryOutput()
   serialize(stream, data, config)
   stream.getOutput()
+
+# Convenience overload with default config
+proc serializeToSeq(
+    data: openArray[byte], config: Fixed8LEConfig = standard()
+): seq[byte] {.raises: [BincodeError, IOError].} =
+  serializeToSeq[FixedEncoding[8], LittleEndian, BINCODE_SIZE_LIMIT](data, config)
 
 const TestDataDir = "target/test_data"
 
@@ -90,8 +98,10 @@ func formatVecForLog(data: openArray[byte]): string =
   else:
     return $data
 
-proc serializeToFile(
-    data: openArray[byte], filename: string, config: BincodeConfig = standard()
+proc serializeToFile[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](
+    data: openArray[byte], filename: string, config: BincodeConfig[E, O, L]
 ) {.raises: [BincodeError, IOError, OSError].} =
   ## Serialize data and write directly to file for Rust to read (no intermediate allocation)
   createDir(TestDataDir)
@@ -101,8 +111,10 @@ proc serializeToFile(
   output.close()
   echo "Serialized ", formatVecForLog(data), " to ", filename
 
-proc deserializeFromFile(
-    filename: string, config: BincodeConfig = standard()
+proc deserializeFromFile[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](
+    filename: string, config: BincodeConfig[E, O, L]
 ): seq[byte] {.raises: [BincodeError, IOError, OSError].} =
   ## Read file and deserialize data that was serialized by Rust
   let filePath = TestDataDir / filename

@@ -11,72 +11,87 @@ type
     LittleEndian
     BigEndian
 
-  BincodeConfig* = object
-    ## Configuration for bincode serialization/deserialization.
-    ##
-    ## Use `standard()` to get the default configuration, or build a custom
-    ## configuration using the builder methods.
-    byteOrder*: ByteOrder
-    intSize*: int
-      ## Integer encoding:
-      ## - 0 = variable-length encoding (LEB128)
-      ## - 1, 2, 4, or 8 = fixed encoding with that byte size
-    sizeLimit*: uint64
+  # Compile-time encoding configuration
+  VariableEncoding* = object ## Variable-length encoding (LEB128)
+
+  FixedEncoding*[Size: static int] = object
+    ## Fixed-size encoding with specified byte size
 
 const BINCODE_SIZE_LIMIT* = 65536'u64 # Default 64 KiB limit (matches bincode v2 default)
 
-func standard*(): BincodeConfig =
+type
+  # Generic compile-time configuration
+  BincodeConfig*[
+    Encoding: VariableEncoding | FixedEncoding,
+    Order: static ByteOrder,
+    Limit: static uint64 = BINCODE_SIZE_LIMIT,
+  ] = object
+    ## Configuration for bincode serialization/deserialization.
+    ##
+    ## All parameters are compile-time for maximum optimization:
+    ## - Encoding: VariableEncoding or FixedEncoding[Size]
+    ## - Order: LittleEndian or BigEndian (static)
+    ## - Limit: Size limit as compile-time constant (default: BINCODE_SIZE_LIMIT)
+    ##
+    ## When Limit is known at compile-time, the compiler can optimize size checks.
+    ## For dynamic limits, pass `limit` as a separate parameter to serialize/deserialize functions.
+
+# Convenience type aliases for common configurations
+type
+  VariableLEConfig* = BincodeConfig[VariableEncoding, LittleEndian]
+  VariableBEConfig* = BincodeConfig[VariableEncoding, BigEndian]
+  Fixed8LEConfig* = BincodeConfig[FixedEncoding[8], LittleEndian]
+  Fixed8BEConfig* = BincodeConfig[FixedEncoding[8], BigEndian]
+  Fixed4LEConfig* = BincodeConfig[FixedEncoding[4], LittleEndian]
+  Fixed4BEConfig* = BincodeConfig[FixedEncoding[4], BigEndian]
+  Fixed2LEConfig* = BincodeConfig[FixedEncoding[2], LittleEndian]
+  Fixed2BEConfig* = BincodeConfig[FixedEncoding[2], BigEndian]
+  Fixed1LEConfig* = BincodeConfig[FixedEncoding[1], LittleEndian]
+  Fixed1BEConfig* = BincodeConfig[FixedEncoding[1], BigEndian]
+
+func standard*(): Fixed8LEConfig =
   ## Create a standard bincode configuration with default settings:
   ## - Little-endian byte order
-  ## - Fixed integer encoding (8-byte integers by default)
-  ## - 64 KiB size limit
-  ##
-  ## This matches the current default behavior for backward compatibility.
-  ##
-  BincodeConfig(byteOrder: LittleEndian, intSize: 8, sizeLimit: BINCODE_SIZE_LIMIT)
+  ## - Fixed integer encoding (8-byte integers)
+  ## - 64 KiB size limit (compile-time constant)
+  Fixed8LEConfig()
 
-func withLittleEndian*(config: BincodeConfig): BincodeConfig =
+func withLittleEndian*[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](config: BincodeConfig[E, O, L]): BincodeConfig[E, LittleEndian, L] =
   ## Set byte order to little-endian.
-  var output = config
-  output.byteOrder = LittleEndian
-  output
+  BincodeConfig[E, LittleEndian, L]()
 
-func withBigEndian*(config: BincodeConfig): BincodeConfig =
+func withBigEndian*[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](config: BincodeConfig[E, O, L]): BincodeConfig[E, BigEndian, L] =
   ## Set byte order to big-endian.
-  var output = config
-  output.byteOrder = BigEndian
-  output
+  BincodeConfig[E, BigEndian, L]()
 
-func withFixedIntEncoding*(
-    config: BincodeConfig, size: int = 8
-): BincodeConfig {.raises: [BincodeConfigError].} =
+template withFixedIntEncoding*[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](config: BincodeConfig[E, O, L], size: static int = 8): untyped =
   ## Set integer encoding to fixed-size.
   ##
-  ## `size` specifies the number of bytes to use (1, 2, 4, or 8).
-  ## If `size` is 0, it is treated as variable-length encoding.
-  ## Raises `BincodeConfigError` if size is not 0, 1, 2, 4, or 8.
-  var output = config
-  if size == 0:
-    output.intSize = 0
+  ## `size` must be a compile-time constant: 1, 2, 4, or 8.
+  when size notin [1, 2, 4, 8]:
+    {.error: "Fixed encoding size must be 1, 2, 4, or 8".}
   else:
-    if size notin [1, 2, 4, 8]:
-      raise
-        newException(BincodeConfigError, "Invalid fixedIntSize: must be 1, 2, 4, or 8")
-    output.intSize = size
-  output
+    BincodeConfig[FixedEncoding[size], O, L]()
 
-func withVariableIntEncoding*(config: BincodeConfig): BincodeConfig =
+func withVariableIntEncoding*[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](config: BincodeConfig[E, O, L]): BincodeConfig[VariableEncoding, O, L] =
   ## Set integer encoding to variable-length (LEB128).
-  ##
-  ## This sets intSize to 0 to indicate variable encoding.
-  var output = config
-  output.intSize = 0
-  output
+  BincodeConfig[VariableEncoding, O, L]()
 
-func withLimit*(config: BincodeConfig, limit: uint64): BincodeConfig =
+template withLimit*[
+    E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
+](config: BincodeConfig[E, O, L], limit: static uint64): untyped =
   ## Set the maximum size limit for serialized data.
-  var output = config
-  output.sizeLimit = limit
-  output
+  ##
+  ## `limit` must be a compile-time constant for optimal performance.
+  ## For runtime limits, pass `limit` as a separate parameter to serialize/deserialize functions.
+  BincodeConfig[E, O, limit]()
 
 {.pop.}
