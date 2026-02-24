@@ -151,14 +151,12 @@ func decodeLength*[
   when E is FixedEncoding:
     if data.len < LENGTH_PREFIX_SIZE:
       raise newException(BincodeError, "Insufficient data for length prefix")
-    var lengthBytes: array[LENGTH_PREFIX_SIZE, byte]
-    # Use copyMem for efficient copying instead of loop
-    copyMem(lengthBytes[0].addr, data[0].unsafeAddr, LENGTH_PREFIX_SIZE)
+    # Read the fixed-length prefix directly from the input buffer
     when O == LittleEndian:
-      let length = fromBytesLE(uint64, lengthBytes)
+      let length = fromBytesLE(uint64, data[0 ..< LENGTH_PREFIX_SIZE])
       return (length, LENGTH_PREFIX_SIZE)
     elif O == BigEndian:
-      let length = fromBytesBE(uint64, lengthBytes)
+      let length = fromBytesBE(uint64, data[0 ..< LENGTH_PREFIX_SIZE])
       return (length, LENGTH_PREFIX_SIZE)
   elif E is VariableEncoding:
     # Variable encoding: Rust bincode uses special encoding
@@ -175,28 +173,19 @@ func decodeLength*[
       # 0xfb + u16 little-endian
       if data.len < 3:
         raise newException(BincodeError, "Insufficient data for u16 length prefix")
-      var u16Bytes: array[2, byte]
-      # Use copyMem for efficient copying instead of individual assignments
-      copyMem(u16Bytes[0].addr, data[1].unsafeAddr, 2)
-      let length = fromBytesLE(uint16, u16Bytes).uint64
+      let length = fromBytesLE(uint16, data[1 ..< 3]).uint64
       return (length, 3)
     elif firstByte == RUST_BINCODE_MARKER_U32:
       # 0xfc + u32 little-endian
       if data.len < 5:
         raise newException(BincodeError, "Insufficient data for u32 length prefix")
-      var u32Bytes: array[4, byte]
-      # Use copyMem for efficient copying instead of loop
-      copyMem(u32Bytes[0].addr, data[1].unsafeAddr, 4)
-      let length = fromBytesLE(uint32, u32Bytes).uint64
+      let length = fromBytesLE(uint32, data[1 ..< 5]).uint64
       return (length, 5)
     elif firstByte == RUST_BINCODE_MARKER_U64:
       # 0xfd + u64 little-endian
       if data.len < 9:
         raise newException(BincodeError, "Insufficient data for u64 length prefix")
-      var u64Bytes: array[8, byte]
-      # Use copyMem for efficient copying instead of loop
-      copyMem(u64Bytes[0].addr, data[1].unsafeAddr, 8)
-      let length = fromBytesLE(uint64, u64Bytes)
+      let length = fromBytesLE(uint64, data[1 ..< 9])
       return (length, 9)
     elif firstByte == RUST_BINCODE_MARKER_U128:
       # 0xfe + u128 little-endian
@@ -212,10 +201,7 @@ func decodeLength*[
       if not allZero:
         raise newException(BincodeError, "Length value exceeds uint64 maximum (2^64-1)")
       # Extract low 8 bytes as u64
-      var u64Bytes: array[8, byte]
-      # Use copyMem for efficient copying instead of loop
-      copyMem(u64Bytes[0].addr, data[1].unsafeAddr, 8)
-      let length = fromBytesLE(uint64, u64Bytes)
+      let length = fromBytesLE(uint64, data[1 ..< 9])
       return (length, 17)
     elif firstByte == 0xff'u8:
       # 0xff is not a valid marker byte in Rust bincode v2
@@ -273,11 +259,11 @@ proc serialize*(
     stream, data, config, limit
   )
 
-func deserialize*[
+proc deserialize*[
     E: VariableEncoding | FixedEncoding, O: static ByteOrder, L: static uint64
 ](
     data: openArray[byte], config: BincodeConfig[E, O, L], limit: uint64 = L
-): seq[byte] {.raises: [BincodeError].} =
+): seq[byte] {.raises: [BincodeError, IOError].} =
   ## Deserialize bincode-encoded data to a byte sequence.
   ##
   ## Format depends on config:
@@ -313,21 +299,21 @@ func deserialize*[
   let length = lengthValue.int
   checkSufficientData(data.len, prefixSize, length)
 
-  # Use copyMem for efficient memory copying (faststreams-style optimization)
-  var output = newSeq[byte](length)
+  # Stream-based copy: write payload into an OutputStream and return its buffer.
+  var stream = memoryOutput()
   if length > 0:
-    copyMem(output[0].addr, data[prefixSize].unsafeAddr, length)
+    stream.write(data[prefixSize ..< prefixSize + length])
 
   checkNoTrailingBytes(data.len, prefixSize, length)
 
-  output
+  stream.getOutput()
 
 # Convenience overload with default config
-func deserialize*(
+proc deserialize*(
     data: openArray[byte],
     config: Fixed8LEConfig = standard(),
     limit: uint64 = BINCODE_SIZE_LIMIT,
-): seq[byte] {.raises: [BincodeError].} =
+): seq[byte] {.raises: [BincodeError, IOError].} =
   deserialize[FixedEncoding[8], LittleEndian, BINCODE_SIZE_LIMIT](data, config, limit)
 
 {.pop.}
