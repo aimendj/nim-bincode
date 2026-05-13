@@ -1,8 +1,8 @@
 .PHONY: help build examples test test-nim test-format test-cross test-cross-variable test-cross-fixed8 test-markers clean format format-check install-deps
 
 # Variables
-NIM_SRC = bincode
-NIM_EXAMPLES = bincode/examples
+NIM_SRC = src
+NIM_EXAMPLES = src/examples
 NIM_TESTS = tests
 
 # Default target
@@ -155,12 +155,12 @@ test-nim: install-deps
 # Format all Nim files
 format:
 	@echo "Formatting Nim files..."
-	nph bincode/bincode.nim
-	nph bincode/bincode_common.nim
-	nph bincode/bincode_helpers.nim
-	nph bincode/bincode_config.nim
-	nph bincode/examples/example.nim
-	nph bincode/examples/struct_example.nim
+	nph src/bincode.nim
+	nph src/bincode_common.nim
+	nph src/bincode_helpers.nim
+	nph src/bincode_config.nim
+	nph src/examples/example.nim
+	nph src/examples/struct_example.nim
 	nph tests/test_bincode.nim
 	nph tests/test_bincode_config.nim
 	nph tests/test_cross_verification.nim
@@ -169,12 +169,12 @@ format:
 # Check if Nim files are formatted
 format-check:
 	@echo "Checking Nim file formatting..."
-	@nph --check bincode/bincode.nim && \
-	 nph --check bincode/bincode_common.nim && \
-	 nph --check bincode/bincode_helpers.nim && \
-	 nph --check bincode/bincode_config.nim && \
-	 nph --check bincode/examples/example.nim && \
-	 nph --check bincode/examples/struct_example.nim && \
+	@nph --check src/bincode.nim && \
+	 nph --check src/bincode_common.nim && \
+	 nph --check src/bincode_helpers.nim && \
+	 nph --check src/bincode_config.nim && \
+	 nph --check src/examples/example.nim && \
+	 nph --check src/examples/struct_example.nim && \
 	 nph --check tests/test_bincode.nim && \
 	 nph --check tests/test_bincode_config.nim && \
 	 nph --check tests/test_cross_verification.nim && \
@@ -207,7 +207,7 @@ clean:
 	@echo "Cleaning build artifacts..."
 	cargo clean
 	rm -rf bin/
-	rm -f bincode/examples/example bincode/examples/struct_example
+	rm -f src/examples/example src/examples/struct_example
 	rm -f tests/test_bincode tests/test_bincode_config
 	rm -f target/nim_test_variable target/nim_test_fixed8
 	rm -f target/benchmark_nim
