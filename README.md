@@ -62,10 +62,10 @@ First, install dependencies:
 make install-deps
 ```
 
-The `bincode/nim_bincode.nim` module provides the native Nim implementation:
+The `bincode/bincode.nim` module provides the native Nim implementation:
 
 ```nim
-import bincode/nim_bincode
+import bincode
 
 # Serialize bytes
 let data = @[byte(1), 2, 3, 4, 5]
@@ -170,13 +170,13 @@ make format-check
 
 ```bash
 # Format a single file
-nph bincode/nim_bincode.nim
+nph bincode/bincode.nim
 
 # Format an entire directory
 nph bincode/
 
 # Show diff of formatting changes
-nph --diff bincode/nim_bincode.nim
+nph --diff bincode/bincode.nim
 ```
 
 ## Project Structure
@@ -186,7 +186,7 @@ nph --diff bincode/nim_bincode.nim
 ├── Cargo.toml          # Rust test harness configuration
 ├── Makefile            # Build and test automation
 ├── bincode/
-│   ├── nim_bincode.nim # Main public API (re-exports from bincode_common and bincode_helpers)
+│   ├── bincode.nim # Main public API (re-exports from bincode_common and bincode_helpers)
 │   ├── bincode_common.nim # Core byte serialization/deserialization
 │   ├── bincode_helpers.nim # String and integer serialization/deserialization
 │   ├── bincode_config.nim # Configuration types and builders

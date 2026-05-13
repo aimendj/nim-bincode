@@ -6,7 +6,7 @@
 import faststreams # Uses: memoryOutput, fileOutput, getOutput, close
 import unittest2
 import std/os
-import nim_bincode
+import bincode
 import bincode_config
 
 # Helper function to serialize using streaming API and return seq[byte]

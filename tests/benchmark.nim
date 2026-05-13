@@ -5,7 +5,7 @@
 
 import faststreams  # Uses: memoryOutput, getOutput
 import std/[times, strformat]
-import nim_bincode
+import bincode
 import bincode_config
 
 # Helper function to serialize using streaming API and return seq[byte]

@@ -155,7 +155,7 @@ test-nim: install-deps
 # Format all Nim files
 format:
 	@echo "Formatting Nim files..."
-	nph bincode/nim_bincode.nim
+	nph bincode/bincode.nim
 	nph bincode/bincode_common.nim
 	nph bincode/bincode_helpers.nim
 	nph bincode/bincode_config.nim
@@ -169,7 +169,7 @@ format:
 # Check if Nim files are formatted
 format-check:
 	@echo "Checking Nim file formatting..."
-	@nph --check bincode/nim_bincode.nim && \
+	@nph --check bincode/bincode.nim && \
 	 nph --check bincode/bincode_common.nim && \
 	 nph --check bincode/bincode_helpers.nim && \
 	 nph --check bincode/bincode_config.nim && \

@@ -6,7 +6,7 @@
 import faststreams # Uses: memoryOutput, getOutput
 import unittest2
 import bincode_config
-import nim_bincode
+import bincode
 
 # Helper function to serialize using streaming API and return seq[byte]
 proc serializeToSeq(

@@ -4,7 +4,7 @@
 {.push raises: [], gcsafe.}
 
 import faststreams # Uses: memoryOutput, getOutput
-import ../nim_bincode
+import ../bincode
 import ../bincode_config
 
 type Person* = object
