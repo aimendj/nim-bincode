@@ -79,6 +79,28 @@ func getExpectedData(): seq[seq[byte]] =
         # Just at 2^16 threshold (uses 0xfc + u32 LE: 5 + 65536 = 65541)
     ]
 
+func maxPayloadLenForFixedInt(fixedIntBytes: int): uint64 {.raises: [].} =
+  ## Largest `seq[byte]` length representable with a fixed `fixedIntBytes` length prefix.
+  case fixedIntBytes
+  of 1:
+    uint8.high.uint64
+  of 2:
+    uint16.high.uint64
+  of 4:
+    uint32.high.uint64
+  of 8:
+    uint64.high
+  else:
+    uint64.high
+
+func expectedPayloadsForNimFixedRoundtrip(fixedIntBytes: int): seq[seq[byte]] {.raises: [].} =
+  ## Subset of `getExpectedData()` that fits the fixed length prefix (Rust uses u64 only).
+  let cap = maxPayloadLenForFixedInt(fixedIntBytes)
+  result = @[]
+  for p in getExpectedData():
+    if p.len.uint64 <= cap:
+      result.add p
+
 # ============================================================================
 # Helper Functions
 # ============================================================================
@@ -280,35 +302,35 @@ when RUN_FIXED8_TESTS:
       echo "Deserialized ", formatVecForLog(deserialized), " from rust_fixed8_003.bin"
       check deserialized == @[byte(0), 255, 128, 64]
 
-    test "deserialize rust_fixed8_004.bin (100 bytes)":
+    test "deserialize rust_fixed8_004.bin (Hello, World!)":
       let config = standard().withFixedIntEncoding(8)
       let deserialized = deserializeFromFile("rust_fixed8_004.bin", config)
-      echo "Deserialized ", deserialized.len, " bytes from rust_fixed8_004.bin"
+      let text = cast[string](deserialized)
+      echo "Deserialized ",
+        formatVecForLog(deserialized), " (", text, ") from rust_fixed8_004.bin"
+      check text == "Hello, World!"
+
+    test "deserialize rust_fixed8_005.bin":
+      let config = standard().withFixedIntEncoding(8)
+      let deserialized = deserializeFromFile("rust_fixed8_005.bin", config)
+      echo "Deserialized ", formatVecForLog(deserialized), " from rust_fixed8_005.bin"
+      check deserialized == @[byte(42)]
+
+    test "deserialize rust_fixed8_006.bin (unicode)":
+      let config = standard().withFixedIntEncoding(8)
+      let deserialized = deserializeFromFile("rust_fixed8_006.bin", config)
+      let text = cast[string](deserialized)
+      echo "Deserialized ",
+        formatVecForLog(deserialized), " (", text, ") from rust_fixed8_006.bin"
+      check text == "Test with émojis 🚀"
+
+    test "deserialize rust_fixed8_007.bin (100 bytes)":
+      let config = standard().withFixedIntEncoding(8)
+      let deserialized = deserializeFromFile("rust_fixed8_007.bin", config)
+      echo "Deserialized ", deserialized.len, " bytes from rust_fixed8_007.bin"
       check deserialized.len == 100
       for i in 0 ..< deserialized.len:
         check deserialized[i] == byte(1)
-
-    test "deserialize rust_fixed8_005.bin (string)":
-      let config = standard().withFixedIntEncoding(8)
-      let deserialized = deserializeFromFile("rust_fixed8_005.bin", config)
-      let text = cast[string](deserialized)
-      echo "Deserialized ",
-        formatVecForLog(deserialized), " (", text, ") from rust_fixed8_005.bin"
-      check text == "Hello, World!"
-
-    test "deserialize rust_fixed8_006.bin":
-      let config = standard().withFixedIntEncoding(8)
-      let deserialized = deserializeFromFile("rust_fixed8_006.bin", config)
-      echo "Deserialized ", formatVecForLog(deserialized), " from rust_fixed8_006.bin"
-      check deserialized == @[byte(42)]
-
-    test "deserialize rust_fixed8_007.bin (unicode)":
-      let config = standard().withFixedIntEncoding(8)
-      let deserialized = deserializeFromFile("rust_fixed8_007.bin", config)
-      let text = cast[string](deserialized)
-      echo "Deserialized ",
-        formatVecForLog(deserialized), " (", text, ") from rust_fixed8_007.bin"
-      check text == "Test with émojis 🚀"
 
     test "deserialize rust_fixed8_008.bin (20kB)":
       let config = standard().withFixedIntEncoding(8)
@@ -375,5 +397,62 @@ when RUN_FIXED8_TESTS:
 
         # Roundtrip must preserve data
         check nimDeserialized == original
+
+when RUN_FIXED8_TESTS:
+  suite "Nim roundtrip (fixed 1-byte length prefix)":
+    test "deserialize(serialize(payload)) for all payloads that fit u8 length":
+      let testCases = expectedPayloadsForNimFixedRoundtrip(1)
+      let config =
+        standard().withFixedIntEncoding(1).withLimit(4294967305'u64)
+      for original in testCases:
+        let wire = serializeToSeq(original, config)
+        let back = deserialize(wire, config)
+        check back == original
+        echo "✓ fixed1 roundtrip ", formatVecForLog(original)
+
+    test "empty vec uses one zero byte as length prefix":
+      let config =
+        standard().withFixedIntEncoding(1).withLimit(4294967305'u64)
+      let wire = serializeToSeq(@[], config)
+      check wire == @[0'u8]
+      check deserialize(wire, config).len == 0
+
+when RUN_FIXED8_TESTS:
+  suite "Nim roundtrip (fixed 2-byte length prefix)":
+    test "deserialize(serialize(payload)) for all payloads that fit u16 length":
+      let testCases = expectedPayloadsForNimFixedRoundtrip(2)
+      let config =
+        standard().withFixedIntEncoding(2).withLimit(4294967305'u64)
+      for original in testCases:
+        let wire = serializeToSeq(original, config)
+        let back = deserialize(wire, config)
+        check back == original
+        echo "✓ fixed2 roundtrip ", formatVecForLog(original)
+
+    test "empty vec uses two little-endian zero bytes as length prefix":
+      let config =
+        standard().withFixedIntEncoding(2).withLimit(4294967305'u64)
+      let wire = serializeToSeq(@[], config)
+      check wire == @[0'u8, 0'u8]
+      check deserialize(wire, config).len == 0
+
+when RUN_FIXED8_TESTS:
+  suite "Nim roundtrip (fixed 4-byte length prefix)":
+    test "deserialize(serialize(payload)) for all payloads that fit u32 length":
+      let testCases = expectedPayloadsForNimFixedRoundtrip(4)
+      let config =
+        standard().withFixedIntEncoding(4).withLimit(4294967305'u64)
+      for original in testCases:
+        let wire = serializeToSeq(original, config)
+        let back = deserialize(wire, config)
+        check back == original
+        echo "✓ fixed4 roundtrip ", formatVecForLog(original)
+
+    test "empty vec uses four little-endian zero bytes as length prefix":
+      let config =
+        standard().withFixedIntEncoding(4).withLimit(4294967305'u64)
+      let wire = serializeToSeq(@[], config)
+      check wire == @[0'u8, 0'u8, 0'u8, 0'u8]
+      check deserialize(wire, config).len == 0
 
 {.pop.}
