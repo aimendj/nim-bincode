@@ -1,4 +1,4 @@
-.PHONY: help build examples test test-nim test-format test-cross test-cross-variable test-cross-fixed8 test-markers clean format format-check install-deps
+.PHONY: help build examples test test-nim test-format test-cross test-cross-variable test-cross-fixed8 test-cross-fixed4 test-markers clean format format-check install-deps benchmark
 
 # Variables
 NIM_SRC = src
@@ -16,6 +16,7 @@ help:
 	@echo "  make test-cross     - Run all Nim↔Rust cross-verification tests"
 	@echo "  make test-cross-variable - Run variable-length encoding cross-verification tests"
 	@echo "  make test-cross-fixed8 - Run fixed 8-byte encoding cross-verification tests"
+	@echo "  make test-cross-fixed4 - Run Nim fixed 4-byte length-prefix roundtrip tests (no Rust)"
 	@echo "  make test-markers   - Run marker byte prefix verification tests (0xfb, 0xfc, 0xfd)"
 	@echo "  make format         - Format all Nim files"
 	@echo "  make format-check   - Check if Nim files are formatted"
@@ -117,6 +118,16 @@ test-cross-fixed8: install-deps
 	@echo "Step 4: Rust deserializes Nim data (fixed 8-byte)..."
 	@cargo test --test cross_verification test_nim_serialize_rust_deserialize_fixed8 -- --nocapture || (echo "ERROR: Step 4 failed - check if Nim serialization files exist" && exit 1)
 	@echo "Fixed 8-byte encoding tests complete!"
+
+# Nim-only: Rust bincode 2 always uses u64 for fixed collection lengths, so there is no Rust↔Nim fixed4 cross.
+test-cross-fixed4: install-deps
+	@echo "=== Fixed 4-byte length prefix (Nim roundtrip) ==="
+	@if [ ! -f target/nim_test_fixed8 ] || [ $(NIM_TESTS)/test_cross_verification.nim -nt target/nim_test_fixed8 ]; then \
+		echo "Compiling Nim cross-verification test (fixed8 binary, fixed4 filter)..."; \
+		nim c -d:release -d:testFixed8 -o:target/nim_test_fixed8 $(NIM_TESTS)/test_cross_verification.nim; \
+	fi
+	@./target/nim_test_fixed8 'Nim roundtrip (fixed 4-byte length prefix)::*'
+	@echo "Fixed 4-byte encoding tests complete!"
 
 # Run Rust bincode format verification tests
 test-format: install-deps

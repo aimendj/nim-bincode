@@ -28,7 +28,7 @@ proc serializeStringToSeq(
 # Helper function to serialize int32 using streaming API and return seq[byte]
 proc serializeInt32ToSeq(
     value: int32, config: BincodeConfig = standard()
-): seq[byte] {.raises: [IOError].} =
+): seq[byte] {.raises: [BincodeError, IOError].} =
   var stream = memoryOutput()
   serializeInt32(stream, value, config)
   stream.getOutput()
@@ -36,7 +36,7 @@ proc serializeInt32ToSeq(
 # Helper function to serialize uint32 using streaming API and return seq[byte]
 proc serializeUint32ToSeq(
     value: uint32, config: BincodeConfig = standard()
-): seq[byte] {.raises: [IOError].} =
+): seq[byte] {.raises: [BincodeError, IOError].} =
   var stream = memoryOutput()
   serializeUint32(stream, value, config)
   stream.getOutput()
@@ -44,7 +44,7 @@ proc serializeUint32ToSeq(
 # Helper function to serialize int64 using streaming API and return seq[byte]
 proc serializeInt64ToSeq(
     value: int64, config: BincodeConfig = standard()
-): seq[byte] {.raises: [IOError].} =
+): seq[byte] {.raises: [BincodeError, IOError].} =
   var stream = memoryOutput()
   serializeInt64(stream, value, config)
   stream.getOutput()
@@ -295,6 +295,22 @@ suite "Int64 serialization":
     let insufficient = @[byte(1), 2, 3, 4, 5, 6, 7] # Only 7 bytes, need 8
     expect BincodeError:
       discard deserializeInt64(insufficient)
+
+suite "Container length prefix uses intSize in fixed mode":
+  test "intSize 4 uses 4-byte LE length for byte sequences":
+    let cfg = standard().withFixedIntEncoding(4)
+    let data = @[byte(1), 2, 3]
+    let s = serializeToSeq(data, cfg)
+    check s.len == 7
+    check s[0 .. 3] == @[byte(3), 0, 0, 0]
+    check s[4 .. 6] == data
+    check deserialize(s, cfg) == data
+
+  test "intSize 1 rejects length above 255":
+    let cfg = standard().withFixedIntEncoding(1).withLimit(10_000'u64)
+    var big = newSeq[byte](300)
+    expect BincodeError:
+      discard serializeToSeq(big, cfg)
 
 # ============================================================================
 # LEB128 Encoding Tests (Variable-Length Encoding)

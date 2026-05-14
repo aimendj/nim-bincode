@@ -19,7 +19,7 @@ proc serializeToSeq(
 # Helper function to serialize int32 using streaming API and return seq[byte]
 proc serializeInt32ToSeq(
     value: int32, config: BincodeConfig = standard()
-): seq[byte] {.raises: [IOError].} =
+): seq[byte] {.raises: [BincodeError, IOError].} =
   var stream = memoryOutput()
   serializeInt32(stream, value, config)
   stream.getOutput()
@@ -27,7 +27,7 @@ proc serializeInt32ToSeq(
 # Helper function to serialize uint32 using streaming API and return seq[byte]
 proc serializeUint32ToSeq(
     value: uint32, config: BincodeConfig = standard()
-): seq[byte] {.raises: [IOError].} =
+): seq[byte] {.raises: [BincodeError, IOError].} =
   var stream = memoryOutput()
   serializeUint32(stream, value, config)
   stream.getOutput()
@@ -35,7 +35,7 @@ proc serializeUint32ToSeq(
 # Helper function to serialize int64 using streaming API and return seq[byte]
 proc serializeInt64ToSeq(
     value: int64, config: BincodeConfig = standard()
-): seq[byte] {.raises: [IOError].} =
+): seq[byte] {.raises: [BincodeError, IOError].} =
   var stream = memoryOutput()
   serializeInt64(stream, value, config)
   stream.getOutput()

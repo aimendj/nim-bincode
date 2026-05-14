@@ -21,7 +21,7 @@ proc serializeString*(
   ## Serialize a string to bincode format and write to stream.
   ##
   ## Format depends on config:
-  ## - Fixed encoding: [8-byte u64 length] + [UTF-8 bytes]
+  ## - Fixed encoding: [``config.intSize``-byte unsigned length] + [UTF-8 bytes]
   ## - Variable encoding: [LEB128 length] + [UTF-8 bytes]
   ##
   ## The length is the UTF-8 byte count, not character count.
@@ -48,7 +48,7 @@ func deserializeString*(
   ## Deserialize bincode-encoded data to a string.
   ##
   ## Format depends on config:
-  ## - Fixed encoding: [8-byte u64 length] + [UTF-8 bytes]
+  ## - Fixed encoding: [``config.intSize``-byte unsigned length] + [UTF-8 bytes]
   ## - Variable encoding: [LEB128 length] + [UTF-8 bytes]
   ##
   ## The length is the UTF-8 byte count, not character count.
@@ -72,7 +72,7 @@ func deserializeString*(
 
 proc serializeInt32*(
     stream: OutputStreamHandle, value: int32, config: BincodeConfig = standard()
-) {.raises: [IOError].} =
+) {.raises: [BincodeError, IOError].} =
   ## Serialize an int32 to bincode format and write to stream.
   ##
   ## Wraps the int32 bytes in Vec<u8> format.
@@ -154,7 +154,7 @@ func deserializeInt32*(
 
 proc serializeUint32*(
     stream: OutputStreamHandle, value: uint32, config: BincodeConfig = standard()
-) {.raises: [IOError].} =
+) {.raises: [BincodeError, IOError].} =
   ## Serialize a uint32 to bincode format and write to stream.
   ##
   ## Wraps the uint32 bytes in Vec<u8> format.
@@ -226,7 +226,7 @@ func deserializeUint32*(
 
 proc serializeInt64*(
     stream: OutputStreamHandle, value: int64, config: BincodeConfig = standard()
-) {.raises: [IOError].} =
+) {.raises: [BincodeError, IOError].} =
   ## Serialize an int64 to bincode format and write to stream.
   ##
   ## Wraps the int64 bytes in Vec<u8> format.

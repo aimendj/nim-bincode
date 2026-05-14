@@ -18,6 +18,8 @@ type BincodeError* = object of CatchableError
   ## Exception raised when bincode operations fail
 
 const LENGTH_PREFIX_SIZE* = 8
+  ## Largest fixed length-prefix width supported (``intSize`` 8). Used as a loose
+  ## default for ``checkMinimumSize`` only; real prefixes follow ``config.intSize``.
 
 # Rust bincode variable-length encoding constants
 # Values < 251: Single byte (the value itself)
@@ -89,18 +91,48 @@ func zigzagDecode*(value: uint64): int64 =
   else:
     not ((value shr 1).int64)
 
+func maxUnsignedForFixedIntSize*(size: int): uint64 {.raises: [BincodeError].} =
+  ## Largest unsigned integer representable in ``size`` bytes (1, 2, 4, or 8).
+  case size
+  of 1:
+    uint8.high.uint64
+  of 2:
+    uint16.high.uint64
+  of 4:
+    uint32.high.uint64
+  of 8:
+    uint64.high
+  else:
+    raise newException(BincodeError, "invalid fixed int size for length prefix")
+
 proc encodeLength*(
     stream: OutputStreamHandle, length: uint64, config: BincodeConfig
-) {.raises: [IOError].} =
-  ## Encode a length value according to the config's integer encoding and write to stream.
+) {.raises: [BincodeError, IOError].} =
+  ## Encode a **container** length (``Vec``/string/byte blob prefix).
+  ##
+  ## - **Variable** mode (``config.intSize == 0``): Rust bincode v2-style length encoding.
+  ## - **Fixed** mode (``config.intSize > 0``): writes ``config.intSize`` bytes
+  ##   (unsigned, same endianness as scalars). Values larger than that width can
+  ##   represent raise ``BincodeError``.
   if config.intSize > 0:
+    let size = config.intSize
+    let cap = maxUnsignedForFixedIntSize(size)
+    if length > cap:
+      raise newException(
+        BincodeError,
+        "Length " & $length & " exceeds maximum for " & $size & "-byte fixed prefix",
+      )
+    let bytes =
+      case config.byteOrder
+      of LittleEndian:
+        toBytesLE(length)
+      of BigEndian:
+        toBytesBE(length)
     case config.byteOrder
     of LittleEndian:
-      let bytes = toBytesLE(length)
-      stream.write(bytes.toOpenArray(0, bytes.high))
+      stream.write(bytes.toOpenArray(0, size - 1))
     of BigEndian:
-      let bytes = toBytesBE(length)
-      stream.write(bytes.toOpenArray(0, bytes.high))
+      stream.write(bytes.toOpenArray(8 - size, 7))
   else:
     # Variable encoding: Rust bincode uses special encoding
     # Note: RUST_BINCODE_MARKER_U128 (0xfe) is not used in encoding since length is uint64 (max 2^64-1)
@@ -128,9 +160,8 @@ proc encodeLength*(
 
 proc encodeLength*(
     length: uint64, config: BincodeConfig
-): seq[byte] {.raises: [IOError].} =
-  ## Encode a length value according to the config's integer encoding.
-  ## Returns a sequence (for backward compatibility).
+): seq[byte] {.raises: [BincodeError, IOError].} =
+  ## Same as `encodeLength(stream, length, config)` but returns a ``seq[byte]``.
   var stream = memoryOutput()
   encodeLength(stream, length, config)
   stream.getOutput()
@@ -138,25 +169,27 @@ proc encodeLength*(
 func decodeLength*(
     data: openArray[byte], config: BincodeConfig
 ): (uint64, int) {.raises: [BincodeError].} =
-  ## Decode a length value according to the config's integer encoding.
-  ## Returns (length, bytes_consumed).
+  ## Decode a **container** length. Returns ``(length, bytes_consumed)``.
   ##
-  ## For variable encoding, Rust's bincode uses a special encoding:
-  ## - Values < 16384: Standard LEB128
-  ## - Values >= 16384: 0xfb marker byte + u16 little-endian (3 bytes total)
+  ## In **fixed** mode (``config.intSize > 0``), reads ``config.intSize`` bytes as an
+  ## unsigned integer (zero-extended to ``uint64``); see `encodeLength`.
+  ## In **variable** mode (``intSize == 0``), uses Rust bincode v2-style markers / LEB128.
   if config.intSize > 0:
-    if data.len < LENGTH_PREFIX_SIZE:
+    let size = config.intSize
+    if data.len < size:
       raise newException(BincodeError, "Insufficient data for length prefix")
-    var lengthBytes: array[LENGTH_PREFIX_SIZE, byte]
-    for i in 0 ..< LENGTH_PREFIX_SIZE:
-      lengthBytes[i] = data[i]
+    var padded: array[8, byte]
     let length =
       case config.byteOrder
       of LittleEndian:
-        fromBytesLE(uint64, lengthBytes)
+        for i in 0 ..< size:
+          padded[i] = data[i]
+        fromBytesLE(uint64, padded)
       of BigEndian:
-        fromBytesBE(uint64, lengthBytes)
-    return (length, LENGTH_PREFIX_SIZE)
+        for i in 0 ..< size:
+          padded[8 - size + i] = data[i]
+        fromBytesBE(uint64, padded)
+    return (length, size)
   else:
     # Variable encoding: Rust bincode uses special encoding
     # Check for marker bytes: 0xfb (u16), 0xfc (u32), 0xfd (u64), 0xfe (u128)
@@ -237,12 +270,13 @@ proc serialize*(
   ## Serialize a byte sequence to bincode format and write to stream.
   ##
   ## Format depends on config:
-  ## - Fixed encoding: [8-byte u64 length] + [data bytes]
+  ## - Fixed encoding: [``intSize``-byte unsigned length] + [data bytes]
   ## - Variable encoding: [LEB128 length] + [data bytes]
   ##
   ## Byte order (little-endian/big-endian) applies to fixed encoding.
   ##
-  ## Raises `BincodeError` if data exceeds the configured size limit.
+  ## Raises `BincodeError` if data exceeds the configured size limit or the length
+  ## does not fit in a fixed ``config.intSize``-byte prefix.
   ## Raises `IOError` if stream write fails.
   ##
   ## Empty sequences serialize to a zero-length prefix + no data bytes.
@@ -259,7 +293,7 @@ func deserialize*(
   ## Deserialize bincode-encoded data to a byte sequence.
   ##
   ## Format depends on config:
-  ## - Fixed encoding: [8-byte u64 length] + [data bytes]
+  ## - Fixed encoding: [``intSize``-byte unsigned length] + [data bytes]
   ## - Variable encoding: [LEB128 length] + [data bytes]
   ##
   ## Byte order (little-endian/big-endian) applies to fixed encoding.

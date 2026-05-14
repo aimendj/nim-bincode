@@ -20,7 +20,9 @@ type
     intSize*: int
       ## Integer encoding:
       ## - 0 = variable-length encoding (LEB128)
-      ## - 1, 2, 4, or 8 = fixed encoding with that byte size
+      ## - 1, 2, 4, or 8 = fixed encoding with that byte size for **scalars**, enum
+      ##   discriminants, and **container length prefixes** (``Vec``/string/byte blob
+      ##   lengths use the same width in little/big-endian).
     sizeLimit*: uint64
 
 const BINCODE_SIZE_LIMIT* = 65536'u64 # Default 64 KiB limit (matches bincode v2 default)
