@@ -312,6 +312,67 @@ suite "Container length prefix uses intSize in fixed mode":
     expect BincodeError:
       discard serializeToSeq(big, cfg)
 
+type PersonTest = object
+  name: string
+  age: uint32
+  email: string
+
+proc serializePersonTest(
+    stream: OutputStreamHandle, p: PersonTest, config: BincodeConfig
+) {.raises: [BincodeError, IOError].} =
+  serializeString(stream, p.name, config)
+  serializeBincodeU32(stream, p.age, config)
+  serializeString(stream, p.email, config)
+
+func deserializePersonTest(
+    data: openArray[byte], config: BincodeConfig
+): PersonTest {.raises: [BincodeError].} =
+  var off = 0
+  let (name, n1) = decodePrefixedString(data, config, off)
+  off += n1
+  let (age, n2) = decodeBincodeU32(data, config, off)
+  off += n2
+  let (email, n3) = decodePrefixedString(data, config, off)
+  off += n3
+  if off != data.len:
+    raise newException(BincodeError, "Trailing bytes after struct fields")
+  PersonTest(name: name, age: age, email: email)
+
+suite "Struct-style field composition (Rust bincode layout)":
+  test "Person-like struct roundtrip with fixed u8 length prefixes and plain u32 age":
+    let cfg =
+      standard().withLittleEndian().withFixedIntEncoding(8).withLimit(65536'u64)
+    let p = PersonTest(
+      name: "Alice", age: 30'u32, email: "alice@example.com"
+    )
+    var st = memoryOutput()
+    serializePersonTest(st, p, cfg)
+    let wire = st.getOutput()
+    check wire.len == 42
+    let q = deserializePersonTest(wire, cfg)
+    check q.name == p.name and q.age == p.age and q.email == p.email
+
+  test "decodePrefixedString reads consecutive strings with offsets":
+    let cfg = standard().withFixedIntEncoding(8)
+    let wire = serializeStringToSeq("a", cfg) & serializeStringToSeq("bc", cfg)
+    let (a, n1) = decodePrefixedString(wire, cfg, 0)
+    let (b, n2) = decodePrefixedString(wire, cfg, n1)
+    check a == "a" and b == "bc" and n1 + n2 == wire.len
+
+  test "serializeBincodeU32 fixed mode writes 4 little-endian bytes":
+    let cfg = standard().withFixedIntEncoding(8)
+    var st = memoryOutput()
+    serializeBincodeU32(st, 30'u32, cfg)
+    check st.getOutput() == @[byte(0x1E), 0, 0, 0]
+
+  test "serializeBincodeU32 variable mode single-byte for 30":
+    let cfg = standard().withVariableIntEncoding()
+    var st = memoryOutput()
+    serializeBincodeU32(st, 30'u32, cfg)
+    let w = st.getOutput()
+    check w == @[30'u8]
+    check decodeBincodeU32(w, cfg, 0) == (30'u32, 1)
+
 # ============================================================================
 # LEB128 Encoding Tests (Variable-Length Encoding)
 # ============================================================================
@@ -496,5 +557,16 @@ suite "Edge cases":
     let invalid = @[byte(0xFF), 0x00, 0x00]
     expect BincodeError:
       discard deserialize(invalid, config)
+
+suite "serializeType / deserializeType with BincodeConfig":
+  test "config overload roundtrips single-byte inner payload with fixed 4-byte length":
+    proc innerToBytes(x: int): seq[byte] =
+      @[byte(x and 0xFF)]
+    proc innerFromBytes(s: openArray[byte]): int =
+      int(s[0])
+    let cfg = standard().withFixedIntEncoding(4)
+    let wire = serializeType(200, cfg, innerToBytes)
+    check wire.len == 5
+    check deserializeType(wire, cfg, innerFromBytes) == 200
 
 {.pop.}

@@ -327,4 +327,32 @@ func deserialize*(
 
   output
 
+func decodePrefixedByteSeq*(
+    data: openArray[byte], config: BincodeConfig, start: int = 0
+): (seq[byte], int) {.raises: [BincodeError].} =
+  ## Decode one length-prefixed byte blob starting at ``start`` (for multi-field
+  ## values such as structs). Returns ``(payload, totalBytesConsumed)`` including
+  ## the length prefix. Unlike `deserialize`_, trailing bytes after the blob are
+  ## allowed (they belong to following fields).
+  if start < 0 or start > data.len:
+    raise newException(BincodeError, "Invalid start offset for prefixed bytes")
+  let relLen = data.len - start
+  if relLen < 1:
+    raise newException(BincodeError, "Insufficient data for length prefix")
+
+  let (lengthValue, prefixSize) =
+    decodeLength(data.toOpenArray(start, data.high), config)
+  checkLengthLimit(lengthValue, config.sizeLimit)
+  if lengthValue > int.high.uint64:
+    raise newException(BincodeError, "Length value exceeds maximum int size")
+
+  let length = lengthValue.int
+  checkSufficientData(relLen, prefixSize, length)
+
+  var output = newSeq[byte](length)
+  if length > 0:
+    copyMem(output[0].addr, data[start + prefixSize].unsafeAddr, length)
+
+  (output, prefixSize + length)
+
 {.pop.}

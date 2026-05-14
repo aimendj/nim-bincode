@@ -19,10 +19,11 @@ type
     byteOrder*: ByteOrder
     intSize*: int
       ## Integer encoding:
-      ## - 0 = variable-length encoding (LEB128)
-      ## - 1, 2, 4, or 8 = fixed encoding with that byte size for **scalars**, enum
-      ##   discriminants, and **container length prefixes** (``Vec``/string/byte blob
-      ##   lengths use the same width in little/big-endian).
+      ## - 0 = variable-length encoding (Rust bincode varint for lengths and wrapped integers)
+      ## - 1, 2, 4, or 8 = fixed width for **container length prefixes** (``Vec``/string/blob)
+      ##   and for `serializeInt32`_ / `serializeUint32`_ / `serializeInt64`_ (Vec-wrapped).
+      ##   Plain scalar fields such as ``u32`` use `serializeBincodeU32`_ (always 4 bytes in
+      ##   fixed mode, independent of ``intSize``), matching Rust ``Encode for u32``.
     sizeLimit*: uint64
 
 const BINCODE_SIZE_LIMIT* = 65536'u64 # Default 64 KiB limit (matches bincode v2 default)

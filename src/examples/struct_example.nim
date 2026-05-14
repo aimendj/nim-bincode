@@ -12,76 +12,38 @@ type Person* = object
   age*: uint32
   email*: string
 
-func personToBytes(p: Person): seq[byte] =
-  var nameLenBytes =
-    @[
-      byte(p.name.len and 0xFF),
-      byte((p.name.len shr 8) and 0xFF),
-      byte((p.name.len shr 16) and 0xFF),
-      byte((p.name.len shr 24) and 0xFF),
-    ]
-  var nameBytes = newSeq[byte](p.name.len)
-  for i in 0 ..< p.name.len:
-    nameBytes[i] = byte(p.name[i])
+proc serializePerson*(
+    stream: OutputStreamHandle, p: Person, config: BincodeConfig
+) {.raises: [BincodeError, IOError].} =
+  ## Serialize ``Person`` in Rust bincode v2 field order: ``name``, ``age``, ``email``.
+  ## Strings use the same length-prefixed UTF-8 layout as `serializeString`_.
+  ## ``age`` uses a plain ``u32`` (see `serializeBincodeU32`_), not ``Vec<u8>``.
+  serializeString(stream, p.name, config)
+  serializeBincodeU32(stream, p.age, config)
+  serializeString(stream, p.email, config)
 
-  var ageBytes =
-    @[
-      byte(p.age and 0xFF),
-      byte((p.age shr 8) and 0xFF),
-      byte((p.age shr 16) and 0xFF),
-      byte((p.age shr 24) and 0xFF),
-    ]
+func deserializePerson*(data: openArray[byte], config: BincodeConfig): Person {.raises: [BincodeError].} =
+  var off = 0
+  let (name, n1) = decodePrefixedString(data, config, off)
+  off += n1
+  let (age, n2) = decodeBincodeU32(data, config, off)
+  off += n2
+  let (email, n3) = decodePrefixedString(data, config, off)
+  off += n3
+  if off != data.len:
+    raise newException(BincodeError, "Trailing bytes after struct fields")
+  Person(name: name, age: age, email: email)
 
-  var emailLenBytes =
-    @[
-      byte(p.email.len and 0xFF),
-      byte((p.email.len shr 8) and 0xFF),
-      byte((p.email.len shr 16) and 0xFF),
-      byte((p.email.len shr 24) and 0xFF),
-    ]
-  var emailBytes = newSeq[byte](p.email.len)
-  for i in 0 ..< p.email.len:
-    emailBytes[i] = byte(p.email[i])
+proc serializePersonToSeq*(p: Person, config: BincodeConfig): seq[byte] {.raises: [BincodeError, IOError].} =
+  var stream = memoryOutput()
+  serializePerson(stream, p, config)
+  stream.getOutput()
 
-  nameLenBytes & nameBytes & ageBytes & emailLenBytes & emailBytes
+proc main() {.raises: [BincodeError, IOError, BincodeConfigError].} =
+  echo "=== Struct example (Rust bincode v2 field layout) ===\n"
 
-func bytesToPerson(data: openArray[byte]): Person =
-  var offset = 0
-  var person: Person
-
-  if data.len >= offset + 4:
-    let nameLen =
-      (data[offset].uint32) or (data[offset + 1].uint32 shl 8) or
-      (data[offset + 2].uint32 shl 16) or (data[offset + 3].uint32 shl 24)
-    offset += 4
-
-    if data.len >= offset + int(nameLen):
-      person.name = newString(int(nameLen))
-      for i in 0 ..< int(nameLen):
-        person.name[i] = char(data[offset + i])
-      offset += int(nameLen)
-
-  if data.len >= offset + 4:
-    person.age =
-      (data[offset].uint32) or (data[offset + 1].uint32 shl 8) or
-      (data[offset + 2].uint32 shl 16) or (data[offset + 3].uint32 shl 24)
-    offset += 4
-
-  if data.len >= offset + 4:
-    let emailLen =
-      (data[offset].uint32) or (data[offset + 1].uint32 shl 8) or
-      (data[offset + 2].uint32 shl 16) or (data[offset + 3].uint32 shl 24)
-    offset += 4
-
-    if data.len >= offset + int(emailLen):
-      person.email = newString(int(emailLen))
-      for i in 0 ..< int(emailLen):
-        person.email[i] = char(data[offset + i])
-
-  person
-
-proc main() {.raises: [BincodeError, IOError].} =
-  echo "=== Struct Example (like Rust direct_example.rs) ===\n"
+  let cfg =
+    standard().withLittleEndian().withFixedIntEncoding(8).withLimit(65536'u64)
 
   let person = Person(name: "Alice", age: 30'u32, email: "alice@example.com")
 
@@ -90,13 +52,10 @@ proc main() {.raises: [BincodeError, IOError].} =
   echo "  age: ", person.age
   echo "  email: ", person.email
 
-  let encoded = serializeType(person, personToBytes)
-
+  let encoded = serializePersonToSeq(person, cfg)
   echo "\nSerialized length: ", encoded.len, " bytes"
-  echo "Serialized bytes: ", encoded
 
-  let decoded = deserializeType(encoded, bytesToPerson)
-
+  let decoded = deserializePerson(encoded, cfg)
   echo "\nDeserialized person:"
   echo "  name: ", decoded.name
   echo "  age: ", decoded.age
@@ -111,11 +70,11 @@ proc main() {.raises: [BincodeError, IOError].} =
   echo "\nOriginal bytes: ", data
 
   var dataStream = memoryOutput()
-  serialize(dataStream, data)
+  serialize(dataStream, data, cfg)
   let encodedBytes = dataStream.getOutput()
   echo "Encoded length: ", encodedBytes.len, " bytes"
 
-  let decodedBytes2 = deserialize(encodedBytes)
+  let decodedBytes2 = deserialize(encodedBytes, cfg)
   echo "Decoded bytes: ", decodedBytes2
   echo "Match: ", data == decodedBytes2
 

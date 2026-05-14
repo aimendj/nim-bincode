@@ -303,4 +303,109 @@ func deserializeInt64*(
       raise newException(BincodeError, "Cannot deserialize int64: invalid encoding")
     return zigzagDecode(decoded.val)
 
+# Rust bincode 2 varint tags for unsigned integers (see ``bincode`` crate ``varint`` module).
+const BincodeVarintSingleByteMaxU32* = 250'u32
+const BincodeVarintU16Tag* = 251'u8
+const BincodeVarintU32Tag* = 252'u8
+
+proc serializeBincodeU32*(
+    stream: OutputStreamHandle, value: uint32, config: BincodeConfig = standard()
+) {.raises: [IOError].} =
+  ## Serialize a **plain** ``u32`` field (Rust ``Encode for u32``), not ``Vec<u8>``.
+  ##
+  ## With fixed integer encoding (``config.intSize > 0``): exactly 4 bytes in the
+  ## configured endianness. With variable encoding: Rust bincode varint (single
+  ## byte up to 250, else ``0xFB`` + u16 or ``0xFC`` + u32).
+  if config.intSize > 0:
+    let b =
+      case config.byteOrder
+      of LittleEndian:
+        toBytesLE(value)
+      of BigEndian:
+        toBytesBE(value)
+    stream.write(b)
+  else:
+    if value <= BincodeVarintSingleByteMaxU32:
+      stream.write([byte(value)])
+    elif value <= uint16.high.uint32:
+      stream.write([BincodeVarintU16Tag])
+      let b =
+        case config.byteOrder
+        of LittleEndian:
+          toBytesLE(uint16(value))
+        of BigEndian:
+          toBytesBE(uint16(value))
+      stream.write(b)
+    else:
+      stream.write([BincodeVarintU32Tag])
+      let b =
+        case config.byteOrder
+        of LittleEndian:
+          toBytesLE(value)
+        of BigEndian:
+          toBytesBE(value)
+      stream.write(b)
+
+func decodeBincodeU32*(
+    data: openArray[byte], config: BincodeConfig, start: int = 0
+): (uint32, int) {.raises: [BincodeError].} =
+  ## Decode a plain ``u32`` written by `serializeBincodeU32`_. Returns ``(value, bytesUsed)``.
+  if start < 0 or start > data.len:
+    raise newException(BincodeError, "Invalid start offset for uint32")
+  if config.intSize > 0:
+    if data.len - start < 4:
+      raise newException(BincodeError, "Insufficient data for uint32")
+    var b: array[4, byte]
+    copyMem(b[0].addr, data[start].unsafeAddr, 4)
+    let v =
+      case config.byteOrder
+      of LittleEndian:
+        fromBytesLE(uint32, b)
+      of BigEndian:
+        fromBytesBE(uint32, b)
+    return (v, 4)
+  else:
+    if start == data.len:
+      raise newException(BincodeError, "Insufficient data for uint32 varint")
+    let tag = data[start]
+    if tag.uint32 <= BincodeVarintSingleByteMaxU32:
+      return (tag.uint32, 1)
+    if tag == BincodeVarintU16Tag:
+      if data.len - start < 3:
+        raise newException(BincodeError, "Insufficient data for uint32 varint (u16)")
+      var b: array[2, byte]
+      b[0] = data[start + 1]
+      b[1] = data[start + 2]
+      let v =
+        case config.byteOrder
+        of LittleEndian:
+          fromBytesLE(uint16, b).uint32
+        of BigEndian:
+          fromBytesBE(uint16, b).uint32
+      return (v, 3)
+    if tag == BincodeVarintU32Tag:
+      if data.len - start < 5:
+        raise newException(BincodeError, "Insufficient data for uint32 varint (u32)")
+      var b: array[4, byte]
+      copyMem(b[0].addr, data[start + 1].unsafeAddr, 4)
+      let v =
+        case config.byteOrder
+        of LittleEndian:
+          fromBytesLE(uint32, b)
+        of BigEndian:
+          fromBytesBE(uint32, b)
+      return (v, 5)
+    raise newException(BincodeError, "Invalid bincode varint tag for uint32")
+
+func decodePrefixedString*(
+    data: openArray[byte], config: BincodeConfig, start: int = 0
+): (string, int) {.raises: [BincodeError].} =
+  ## Like `decodePrefixedByteSeq`_ but returns UTF-8 as ``string`` (same layout as
+  ## `deserializeString`_ / ``String`` in Rust bincode).
+  let (bytes, used) = decodePrefixedByteSeq(data, config, start)
+  var s = newString(bytes.len)
+  if bytes.len > 0:
+    copyMem(s[0].addr, bytes[0].unsafeAddr, bytes.len)
+  (s, used)
+
 {.pop.}
