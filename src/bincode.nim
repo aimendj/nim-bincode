@@ -7,9 +7,13 @@ import faststreams # Uses: memoryOutput, getOutput
 import bincode_common
 import bincode_config
 import bincode_helpers
+import bincode_fields
+import bincode_derive
 export bincode_common
 export bincode_config
 export bincode_helpers
+export bincode_derive
+export bincode_fields
 
 ## Native Nim implementation of a subset of the bincode v2 format.
 ##
@@ -18,11 +22,11 @@ export bincode_helpers
 ##   `decodePrefixedByteSeq`_ for reading one length-prefixed blob inside a larger
 ##   buffer (multi-field / struct layout).
 ## - `bincode_helpers`: Strings, ``Vec<u8>``-wrapped integers, **plain** ``u32``
-##   fields (`serializeBincodeU32`_ / `decodeBincodeU32`_), and related helpers.
+##   fields (`serializeBincodeU32`_ / `deserializeBincodeU32`_), and related helpers.
 ##
-## **Structs** (composite types) are not generated automatically: compose field
-## serializers in declaration order to match Rust ``Encode`` (see
-## ``src/examples/struct_example.nim``). For ad-hoc payloads you can still use
+## **Structs** and **enums**: use ``deriveBincode MyType`` (see `bincode_derive`_) to
+## generate ``serializeMyType`` / ``deserializeMyType``. You can also compose field
+## serializers by hand (``src/examples/struct_example.nim``). For ad-hoc payloads use
 ## `serializeType`_ / `deserializeType`_ with a custom ``toBytes`` / ``fromBytes``
 ## (two-argument form uses `standard()`_ for the outer ``Vec<u8>`` wrapper; overloads
 ## with `BincodeConfig`_ pass that through to `serialize`_ / `deserialize`_).

@@ -3,80 +3,59 @@
 
 {.push raises: [], gcsafe.}
 
-import faststreams # Uses: memoryOutput, getOutput
+import faststreams
 import ../bincode
 import ../bincode_config
+import ../bincode_derive
 
 type Person* = object
   name*: string
   age*: uint32
   email*: string
 
-proc serializePerson*(
-    stream: OutputStreamHandle, p: Person, config: BincodeConfig
-) {.raises: [BincodeError, IOError].} =
-  ## Serialize ``Person`` in Rust bincode v2 field order: ``name``, ``age``, ``email``.
-  ## Strings use the same length-prefixed UTF-8 layout as `serializeString`_.
-  ## ``age`` uses a plain ``u32`` (see `serializeBincodeU32`_), not ``Vec<u8>``.
-  serializeString(stream, p.name, config)
-  serializeBincodeU32(stream, p.age, config)
-  serializeString(stream, p.email, config)
+deriveBincode(Person)
 
-func deserializePerson*(data: openArray[byte], config: BincodeConfig): Person {.raises: [BincodeError].} =
-  var off = 0
-  let (name, n1) = decodePrefixedString(data, config, off)
-  off += n1
-  let (age, n2) = decodeBincodeU32(data, config, off)
-  off += n2
-  let (email, n3) = decodePrefixedString(data, config, off)
-  off += n3
-  if off != data.len:
-    raise newException(BincodeError, "Trailing bytes after struct fields")
-  Person(name: name, age: age, email: email)
+type Status* = enum
+  Active
+  Inactive
+  Pending
 
-proc serializePersonToSeq*(p: Person, config: BincodeConfig): seq[byte] {.raises: [BincodeError, IOError].} =
-  var stream = memoryOutput()
-  serializePerson(stream, p, config)
-  stream.getOutput()
+deriveBincode(Status)
+
+type Packet* = object
+  id*: uint32
+  flags*: seq[byte]
+  score*: float32
+
+deriveBincode(Packet)
 
 proc main() {.raises: [BincodeError, IOError, BincodeConfigError].} =
-  echo "=== Struct example (Rust bincode v2 field layout) ===\n"
+  echo "=== Struct example (deriveBincode) ===\n"
 
   let cfg =
     standard().withLittleEndian().withFixedIntEncoding(8).withLimit(65536'u64)
 
   let person = Person(name: "Alice", age: 30'u32, email: "alice@example.com")
+  let personWire = serializePersonToSeq(person, cfg)
+  let personBack = deserializePerson(personWire, cfg)
+  echo "Person roundtrip: ",
+    personBack.name, " ", personBack.age, " ", personBack.email,
+    " (", personWire.len, " bytes)"
 
-  echo "Original person:"
-  echo "  name: ", person.name
-  echo "  age: ", person.age
-  echo "  email: ", person.email
+  let statusWire = serializeStatusToSeq(Status.Pending, cfg)
+  doAssert deserializeStatus(statusWire, cfg) == Status.Pending
+  echo "Status roundtrip OK (", statusWire.len, " byte(s))"
 
-  let encoded = serializePersonToSeq(person, cfg)
-  echo "\nSerialized length: ", encoded.len, " bytes"
+  let packet = Packet(id: 7'u32, flags: @[byte(1), 2, 3], score: 3.14'f32)
+  let packetWire = serializePacketToSeq(packet, cfg)
+  let packetBack = deserializePacket(packetWire, cfg)
+  echo "Packet roundtrip: id=", packetBack.id, " flags=", packetBack.flags,
+    " score=", packetBack.score, " (", packetWire.len, " bytes)"
 
-  let decoded = deserializePerson(encoded, cfg)
-  echo "\nDeserialized person:"
-  echo "  name: ", decoded.name
-  echo "  age: ", decoded.age
-  echo "  email: ", decoded.email
-  echo "Match: ",
-    (
-      person.name == decoded.name and person.age == decoded.age and
-      person.email == decoded.email
-    )
-
-  let data = @[byte(1), 2, 3, 4, 5, 100, 200, 255]
-  echo "\nOriginal bytes: ", data
-
+  let data = @[byte(1), 2, 3, 4, 5]
   var dataStream = memoryOutput()
   serialize(dataStream, data, cfg)
-  let encodedBytes = dataStream.getOutput()
-  echo "Encoded length: ", encodedBytes.len, " bytes"
-
-  let decodedBytes2 = deserialize(encodedBytes, cfg)
-  echo "Decoded bytes: ", decodedBytes2
-  echo "Match: ", data == decodedBytes2
+  echo "Raw bytes roundtrip: ", deserialize(dataStream.getOutput(), cfg) == data
 
 main()
 

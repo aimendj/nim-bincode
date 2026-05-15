@@ -346,10 +346,10 @@ proc serializeBincodeU32*(
           toBytesBE(value)
       stream.write(b)
 
-func decodeBincodeU32*(
+func deserializeBincodeU32*(
     data: openArray[byte], config: BincodeConfig, start: int = 0
 ): (uint32, int) {.raises: [BincodeError].} =
-  ## Decode a plain ``u32`` written by `serializeBincodeU32`_. Returns ``(value, bytesUsed)``.
+  ## Deserialize a plain ``u32`` written by `serializeBincodeU32`_. Returns ``(value, bytesUsed)``.
   if start < 0 or start > data.len:
     raise newException(BincodeError, "Invalid start offset for uint32")
   if config.intSize > 0:

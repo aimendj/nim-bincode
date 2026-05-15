@@ -330,7 +330,7 @@ func deserializePersonTest(
   var off = 0
   let (name, n1) = decodePrefixedString(data, config, off)
   off += n1
-  let (age, n2) = decodeBincodeU32(data, config, off)
+  let (age, n2) = deserializeBincodeU32(data, config, off)
   off += n2
   let (email, n3) = decodePrefixedString(data, config, off)
   off += n3
@@ -371,7 +371,7 @@ suite "Struct-style field composition (Rust bincode layout)":
     serializeBincodeU32(st, 30'u32, cfg)
     let w = st.getOutput()
     check w == @[30'u8]
-    check decodeBincodeU32(w, cfg, 0) == (30'u32, 1)
+    check deserializeBincodeU32(w, cfg, 0) == (30'u32, 1)
 
 # ============================================================================
 # LEB128 Encoding Tests (Variable-Length Encoding)

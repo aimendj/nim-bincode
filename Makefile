@@ -36,6 +36,7 @@ build: install-deps
 	@mkdir -p bin
 	nim c -d:release $(NIM_EXAMPLES)/example.nim
 	nim c -d:release $(NIM_EXAMPLES)/struct_example.nim
+	nim c -d:release $(NIM_EXAMPLES)/derive_example.nim
 	@echo "Nim examples built in bin/"
 
 # Build and run examples
@@ -44,6 +45,8 @@ examples: build
 	@./bin/example
 	@echo "\nRunning struct_example..."
 	@./bin/struct_example
+	@echo "\nRunning derive_example..."
+	@./bin/derive_example
 
 # Run all tests
 test: test-nim test-format test-cross test-markers
@@ -162,6 +165,8 @@ test-nim: install-deps
 	nim c -r $(NIM_TESTS)/test_bincode_config.nim
 	@echo "Running bincode basic tests..."
 	nim c -r $(NIM_TESTS)/test_bincode.nim
+	@echo "Running deriveBincode tests..."
+	nim c -r $(NIM_TESTS)/test_derive.nim
 
 # Format all Nim files
 format:
@@ -170,11 +175,15 @@ format:
 	nph src/bincode_common.nim
 	nph src/bincode_helpers.nim
 	nph src/bincode_config.nim
+	nph src/bincode_derive.nim
+	nph src/bincode_fields.nim
 	nph src/examples/example.nim
 	nph src/examples/struct_example.nim
+	nph src/examples/derive_example.nim
 	nph tests/test_bincode.nim
 	nph tests/test_bincode_config.nim
 	nph tests/test_cross_verification.nim
+	nph tests/test_derive.nim
 	@echo "Formatting complete."
 
 # Check if Nim files are formatted
@@ -186,6 +195,7 @@ format-check:
 	 nph --check src/bincode_config.nim && \
 	 nph --check src/examples/example.nim && \
 	 nph --check src/examples/struct_example.nim && \
+	 nph --check src/examples/derive_example.nim && \
 	 nph --check tests/test_bincode.nim && \
 	 nph --check tests/test_bincode_config.nim && \
 	 nph --check tests/test_cross_verification.nim && \
@@ -218,7 +228,7 @@ clean:
 	@echo "Cleaning build artifacts..."
 	cargo clean
 	rm -rf bin/
-	rm -f src/examples/example src/examples/struct_example
+	rm -f src/examples/example src/examples/struct_example src/examples/derive_example
 	rm -f tests/test_bincode tests/test_bincode_config
 	rm -f target/nim_test_variable target/nim_test_fixed8
 	rm -f target/benchmark_nim
