@@ -21,6 +21,7 @@ type
     fkArray
     fkEnum
     fkObject
+    fkBytesNewtype
 
   TypeInfo* = object
     kind*: FieldKind
@@ -78,6 +79,76 @@ func arrayAliasBody(sym: NimNode): NimNode =
     return nil
   body
 
+func fieldIdent(name: NimNode): NimNode =
+  ## ``name`` from `recordFields`_ (strips ``*`` / pragma wrappers).
+  var n = name
+  if n.kind == nnkPostfix:
+    n = n[1]
+  if n.kind == nnkPragmaExpr:
+    n = n[0]
+  n
+
+func objectTypeBodyFromImpl(impl: NimNode): NimNode =
+  var body = impl[2]
+  if body.kind == nnkRefTy:
+    body = body[0]
+  return body
+
+## Field definitions from an object type AST (under nnkRecList).
+func iterObjectFieldDefs(body: NimNode): seq[NimNode] =
+  result = @[]
+  if body.kind != nnkObjectTy:
+    return
+  for part in body:
+    if part.kind == nnkRecList:
+      for f in part:
+        if f.kind == nnkIdentDefs:
+          result.add f
+    elif part.kind == nnkIdentDefs:
+      result.add part
+    elif part.kind == nnkRecCase:
+      return @[]
+
+func newtypeDataArrayBracket(sym: NimNode): NimNode =
+  ## ``array[len, byte]`` AST from the sole ``data`` field of a bytes newtype ``sym``.
+  let impl = sym.getImpl()
+  let body = objectTypeBodyFromImpl(impl)
+  let fields = iterObjectFieldDefs(body)
+  if fields.len != 1:
+    error("deriveBincode: bytes newtype must have one field: " & $sym)
+  result = skipTypeModifiers(fields[0][1])
+
+func tryByteArrayWrapper(sym: NimNode): TypeInfo =
+  ## Libp2p-style ``object`` with only ``data*: array[N, byte]`` → ``N`` raw bytes.
+  result = default(TypeInfo)
+  if sym.kind != nnkSym:
+    return
+  let impl = sym.getImpl()
+  if impl.kind != nnkTypeDef:
+    return
+  let body = objectTypeBodyFromImpl(impl)
+  if body.kind != nnkObjectTy:
+    return
+  var names: seq[string] = @[]
+  var typs: seq[NimNode] = @[]
+  for f in iterObjectFieldDefs(body):
+    names.add $fieldIdent(f[0])
+    typs.add f[1]
+  if names.len != 1 or names[0] != "data":
+    return
+  let ft = skipTypeModifiers(typs[0])
+  if ft.kind != nnkBracketExpr or ft[0].kind notin {nnkIdent, nnkSym}:
+    return
+  let head = if ft[0].kind == nnkSym: $ft[0] else: $ft[0]
+  if head != "array":
+    return
+  let elem = skipTypeModifiers(ft[2])
+  if elem.kind != nnkIdent and elem.kind != nnkSym:
+    return
+  if $elem != "byte":
+    return
+  return TypeInfo(kind: fkBytesNewtype)
+
 func classifyType(typ: NimNode): TypeInfo =
   let t = skipTypeModifiers(typ)
   if t.kind == nnkBracketExpr and t[0].kind in {nnkIdent, nnkSym}:
@@ -133,6 +204,9 @@ func classifyType(typ: NimNode): TypeInfo =
         return TypeInfo(kind: fkArray, arrayLen: ab[1], elemType: ab[2])
       if isEnumType(t):
         return TypeInfo(kind: fkEnum, typeSym: t)
+      let wrap = tryByteArrayWrapper(t)
+      if wrap.kind == fkBytesNewtype:
+        return wrap
       return TypeInfo(kind: fkObject, typeSym: t)
     else:
       error("deriveBincode: unsupported field type: " & name)
@@ -140,15 +214,6 @@ func classifyType(typ: NimNode): TypeInfo =
 func bindIdent(name: string): NimNode =
   ## Non-hygienic identifier for AST spliced into generated procs.
   newIdentNode(name)
-
-func fieldIdent(name: NimNode): NimNode =
-  ## ``name`` from `recordFields`_ (strips ``*`` / pragma wrappers).
-  var n = name
-  if n.kind == nnkPostfix:
-    n = n[1]
-  if n.kind == nnkPragmaExpr:
-    n = n[0]
-  n
 
 func caseFieldIdent(caseField: NimNode): NimNode =
   ## Discriminator field from a ``case`` object (``nnkRecCase`` header).
@@ -187,7 +252,7 @@ func bincodeSerializeToSeqName(typeSym: NimNode): NimNode =
   ident("serialize" & $typeSym & "ToSeq")
 
 func buildSerializeAccess(
-    info: TypeInfo, access, streamSym, configSym: NimNode
+    info: TypeInfo, access, streamSym, configSym: NimNode, fieldTyp: NimNode = nil
 ): NimNode =
   case info.kind
   of fkBool:
@@ -208,7 +273,9 @@ func buildSerializeAccess(
   of fkSeq:
     let elemInfo = classifyType(info.elemType)
     let itemSym = bindIdent("item")
-    let elemSer = buildSerializeAccess(elemInfo, itemSym, streamSym, configSym)
+    let elemSer = buildSerializeAccess(
+      elemInfo, itemSym, streamSym, configSym, info.elemType
+    )
     let lenExpr = newTree(
       nnkDotExpr, newDotExpr(access, bindIdent("len")), bindIdent("uint64")
     )
@@ -220,7 +287,9 @@ func buildSerializeAccess(
     let elemInfo = classifyType(info.elemType)
     let iSym = bindIdent("i")
     let elemAccess = newTree(nnkBracketExpr, access, iSym)
-    let elemSer = buildSerializeAccess(elemInfo, elemAccess, streamSym, configSym)
+    let elemSer = buildSerializeAccess(
+      elemInfo, elemAccess, streamSym, configSym, info.elemType
+    )
     return newTree(
       nnkForStmt,
       iSym,
@@ -234,6 +303,13 @@ func buildSerializeAccess(
       newCall(ident"int", newCall(ident"ord", access)),
       configSym,
     )
+  of fkBytesNewtype:
+    let ft = newtypeDataArrayBracket(fieldTyp)
+    let dataAcc = newTree(nnkDotExpr, access, bindIdent("data"))
+    let arrInfo = TypeInfo(
+      kind: fkArray, arrayLen: ft[1], elemType: newIdentNode("by" & "te")
+    )
+    buildSerializeAccess(arrInfo, dataAcc, streamSym, configSym)
   of fkObject:
     newCall(bincodeSerializeName(info.typeSym), streamSym, access, configSym)
 
@@ -254,12 +330,12 @@ func decodeProcFor(info: TypeInfo): NimNode =
       ident("deserializeBincode" & info.scalarSuffix)
   of fkEnum:
     ident"deserializeBincodeEnumDiscriminant"
-  of fkSeq, fkArray, fkObject:
+  of fkSeq, fkArray, fkObject, fkBytesNewtype:
     error("decodeProcFor: use composite decode for " & $info.kind)
 
 func buildDecodeField(
     fieldName: NimNode, tmpSym: NimNode, info: TypeInfo,
-    dataSym, configSym, offSym: NimNode,
+    dataSym, configSym, offSym: NimNode, fieldTyp: NimNode = nil,
 ): NimNode =
   let nSym = newIdentNode("bn_" & $fieldName)
   case info.kind
@@ -309,6 +385,19 @@ func buildDecodeField(
             let (b, nb) = `innerDec`(`dataSym`, `configSym`, `offSym`)
             `offSym` += nb
             `tmpSym`[i][j] = b
+    elif elemInfo.kind == fkBytesNewtype:
+      let n = newtypeDataArrayBracket(elemT)[1]
+      let innerDec = ident"deserializeBincodeU8"
+      quote do:
+        let (`lenValSym`, `nLenSym`) =
+          decodeLength(`dataSym`.toOpenArray(`offSym`, `dataSym`.high), `configSym`)
+        `offSym` += `nLenSym`
+        var `tmpSym` = newSeq[`elemT`](`lenValSym`.int)
+        for i in 0 ..< `tmpSym`.len:
+          for j in 0 ..< `n`:
+            let (b, nb) = `innerDec`(`dataSym`, `configSym`, `offSym`)
+            `offSym` += nb
+            `tmpSym`[i].data[j] = b
     else:
       let elemDec = decodeProcFor(elemInfo)
       quote do:
@@ -339,6 +428,18 @@ func buildDecodeField(
           let (`itemSym`, `nItemSym`) = `elemDec`(`dataSym`, `configSym`, `offSym`)
           `offSym` += `nItemSym`
           `tmpSym`[i] = `itemSym`
+  of fkBytesNewtype:
+    let ft = newtypeDataArrayBracket(fieldTyp)
+    let arrInfo = TypeInfo(
+      kind: fkArray, arrayLen: ft[1], elemType: newIdentNode("by" & "te")
+    )
+    let dataAccess = newTree(nnkDotExpr, tmpSym, bindIdent("data"))
+    newStmtList(
+      quote do:
+        var `tmpSym`: `fieldTyp`
+      ,
+      buildDecodeField(fieldName, dataAccess, arrInfo, dataSym, configSym, offSym),
+    )
   of fkObject:
     let deserAt = bincodeDeserializeAtName(info.typeSym)
     quote do:
@@ -440,7 +541,9 @@ proc genObjectSerialize(
       if f.caseField != nil:
         continue
       let acc = newTree(nnkDotExpr, valueId, fieldIdent(f.name))
-      body.add buildSerializeAccess(classifyType(f.typ), acc, streamId, configId)
+      body.add buildSerializeAccess(
+        classifyType(f.typ), acc, streamId, configId, f.typ
+      )
     let serName = bincodeSerializeName(typeSym)
     quote do:
       proc `serName`*(
@@ -476,7 +579,9 @@ proc genObjectSerialize(
       )
       for f in branchMap.getOrDefault(key):
         let acc = newTree(nnkDotExpr, valueId, fieldIdent(f.name))
-        armBody.add buildSerializeAccess(classifyType(f.typ), acc, streamId, configId)
+        armBody.add buildSerializeAccess(
+          classifyType(f.typ), acc, streamId, configId, f.typ
+        )
       caseStmt.add newTree(nnkOfBranch, branchId, armBody)
 
     let serName = bincodeSerializeName(typeSym)
@@ -509,15 +614,24 @@ proc genObjectDeserializeAt(
         continue
       let info = classifyType(f.typ)
       let fname = fieldIdent(f.name)
-      if info.kind == fkArray:
+      if info.kind in {fkArray, fkBytesNewtype}:
         let access = newDotExpr(resultSym, fname)
-        decodeStmts.add buildDecodeField(
-          fname, access, info, dataId, configId, offId
-        )
+        if info.kind == fkBytesNewtype:
+          let tmpId = newIdentNode("bc_" & $fname)
+          decodeStmts.add buildDecodeField(
+            fname, tmpId, info, dataId, configId, offId, f.typ
+          )
+          assignStmts.add newTree(
+            nnkAsgn, newDotExpr(resultSym, fname), tmpId
+          )
+        else:
+          decodeStmts.add buildDecodeField(
+            fname, access, info, dataId, configId, offId, f.typ
+          )
       else:
         let tmpId = newIdentNode("bc_" & $fname)
         decodeStmts.add buildDecodeField(
-          fname, tmpId, info, dataId, configId, offId
+          fname, tmpId, info, dataId, configId, offId, f.typ
         )
         assignStmts.add newTree(
           nnkAsgn, newDotExpr(resultSym, fname), tmpId
@@ -556,15 +670,22 @@ proc genObjectDeserializeAt(
       for f in branchMap.getOrDefault(key):
         let info = classifyType(f.typ)
         let fname = fieldIdent(f.name)
-        if info.kind == fkArray:
-          let access = newDotExpr(resultSym, fname)
-          decodeStmts.add buildDecodeField(
-            fname, access, info, dataId, configId, offId
-          )
+        if info.kind in {fkArray, fkBytesNewtype}:
+          if info.kind == fkBytesNewtype:
+            let tmpId = newIdentNode("bc_" & $fname)
+            decodeStmts.add buildDecodeField(
+              fname, tmpId, info, dataId, configId, offId, f.typ
+            )
+            assignStmts.add newTree(nnkAsgn, newDotExpr(resultSym, fname), tmpId)
+          else:
+            let access = newDotExpr(resultSym, fname)
+            decodeStmts.add buildDecodeField(
+              fname, access, info, dataId, configId, offId, f.typ
+            )
         else:
           let tmpId = newIdentNode("bc_" & $fname)
           decodeStmts.add buildDecodeField(
-            fname, tmpId, info, dataId, configId, offId
+            fname, tmpId, info, dataId, configId, offId, f.typ
           )
           assignStmts.add newTree(nnkAsgn, newDotExpr(resultSym, fname), tmpId)
       var armStmt = newStmtList()
