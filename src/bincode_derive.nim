@@ -3,7 +3,7 @@
 
 {.push raises: [], gcsafe.}
 
-import std/[macros, strutils, tables]
+import std/[macros, tables]
 from stew/shims/macros import FieldDescription, recordFields
 import faststreams
 
@@ -51,6 +51,23 @@ func isEnumType(sym: NimNode): bool =
   let impl = sym.getImpl()
   impl.expectKind nnkTypeDef
   impl[2].kind == nnkEnumTy
+
+func resolveConcreteSym(sym: NimNode): NimNode =
+  ## Follow ``type A = B`` chains until ``B`` is not a bare ``nnkSym`` alias body.
+  result = sym
+  if sym.kind != nnkSym:
+    return
+  var cur = sym
+  for _ in 0 ..< 64:
+    let impl = cur.getImpl()
+    if impl.kind != nnkTypeDef:
+      break
+    let body = impl[2]
+    if body.kind == nnkSym:
+      cur = body
+      result = cur
+      continue
+    break
 
 func isObjectType(sym: NimNode): bool =
   if sym.kind != nnkSym:
@@ -111,19 +128,22 @@ func iterObjectFieldDefs(body: NimNode): seq[NimNode] =
 
 func newtypeDataArrayBracket(sym: NimNode): NimNode =
   ## ``array[len, byte]`` AST from the sole ``data`` field of a bytes newtype ``sym``.
-  let impl = sym.getImpl()
+  let rsym = resolveConcreteSym(sym)
+  let impl = rsym.getImpl()
   let body = objectTypeBodyFromImpl(impl)
   let fields = iterObjectFieldDefs(body)
   if fields.len != 1:
-    error("deriveBincode: bytes newtype must have one field: " & $sym)
+    error("deriveBincode: bytes newtype must have one field: " & $sym & " (resolved: " &
+        $rsym & ")")
   result = skipTypeModifiers(fields[0][1])
 
 func tryByteArrayWrapper(sym: NimNode): TypeInfo =
   ## Libp2p-style ``object`` with only ``data*: array[N, byte]`` → ``N`` raw bytes.
   result = default(TypeInfo)
-  if sym.kind != nnkSym:
+  let rsym = resolveConcreteSym(sym)
+  if rsym.kind != nnkSym:
     return
-  let impl = sym.getImpl()
+  let impl = rsym.getImpl()
   if impl.kind != nnkTypeDef:
     return
   let body = objectTypeBodyFromImpl(impl)
@@ -354,12 +374,19 @@ func buildDecodeField(
         (cast[`enumTy`](int(`discSym`)), n0)
       `offSym` += `nSym`
   of fkSeq:
+    let fq =
+      block:
+        let id = fieldIdent(fieldName)
+        if id.kind == nnkIdent and $id == "_":
+          "_root"
+        else:
+          $id
+    let lenValSym = bindIdent("lenVal_" & fq)
+    let nLenSym = bindIdent("nLen_" & fq)
+    let itemSym = bindIdent("item_" & fq)
+    let nItemSym = bindIdent("nItem_" & fq)
     let elemInfo = classifyType(info.elemType)
     let elemT = skipTypeModifiers(info.elemType)
-    let lenValSym = bindIdent("lenVal")
-    let nLenSym = bindIdent("nLen")
-    let itemSym = bindIdent("item")
-    let nItemSym = bindIdent("nItem")
     if elemInfo.kind == fkObject:
       let elemAt = bincodeDeserializeAtName(elemInfo.typeSym)
       quote do:
@@ -780,7 +807,6 @@ macro deriveBincode*(typ: typed): untyped =
   quote do:
     import bincode_common
     import bincode_config
-    import bincode_helpers
     import bincode_fields
     import faststreams
     `ser`

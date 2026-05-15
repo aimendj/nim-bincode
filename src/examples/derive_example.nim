@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 # Copyright (c) Status Research & Development GmbH
 #
-# ``deriveBincode`` demo: string, enum, Vec-like ``seq[T]``, and structs that mix them.
+# ``deriveBincode`` demo: string, enum, Vec-like ``seq[T]``, bytes newtypes, mixed structs.
 # (In Rust you would use ``String``, an enum, ``Vec<u8>`` / ``Vec<String>``, and a struct.)
 #
 # Run: nim c -r src/examples/derive_example.nim
@@ -53,6 +53,20 @@ type Record* = object
   extra*: Named
 
 deriveBincode(Record)
+
+# --- Bytes newtype (e.g. libp2p ``EdPublicKey``: ``data: array[N, byte]``) -------
+
+const DigestSize = 32
+
+type Digest* = object
+  ## Fixed-size blob in one field — same shape as ``EdPublicKey``; no extra derive.
+  data*: array[DigestSize, byte]
+
+type Row* = object
+  id*: Digest
+  seq*: uint64
+
+deriveBincode(Row)
 
 proc demoString(cfg: BincodeConfig) {.raises: [BincodeError, IOError].} =
   echo "== string (Named.label) =="
@@ -114,6 +128,21 @@ proc demoMixedRecord(cfg: BincodeConfig) {.raises: [BincodeError, IOError].} =
   doAssert back == v
   echo "  OK\n"
 
+proc demoBytesNewtype(cfg: BincodeConfig) {.raises: [BincodeError, IOError].} =
+  echo "== bytes newtype (Digest.data → ", DigestSize, " raw bytes + Row.seq) =="
+  var digest: Digest
+  for i in 0 ..< DigestSize:
+    digest.data[i] = byte(i + 1)
+  let v = Row(id: digest, seq: 100'u64)
+  let wire = serializeRowToSeq(v, cfg)
+  echo "  wire (", wire.len, " bytes): ", wire.toHex
+  echo "  layout: ", DigestSize, " byte id + 8 byte seq (fixed u64)"
+  let back = deserializeRow(wire, cfg)
+  echo "  back.seq=", back.seq
+  echo "  back.id.data=", back.id.data.toHex
+  doAssert back == v
+  echo "  OK\n"
+
 proc demoDeserializeAt(cfg: BincodeConfig) {.raises: [BincodeError, IOError].} =
   echo "== two Records in one buffer (deserializeRecordAt) =="
   let r1 = Record(
@@ -142,7 +171,7 @@ proc demoDeserializeAt(cfg: BincodeConfig) {.raises: [BincodeError, IOError].} =
   echo "  consumed ", n1 + n2, " / ", blob.len, " bytes\n"
 
 proc main() {.raises: [BincodeError, IOError, BincodeConfigError].} =
-  echo "deriveBincode example: string, enum, Vec (seq), and mixed structs\n"
+  echo "deriveBincode example: string, enum, Vec (seq), bytes newtype, mixed structs\n"
   echo "Wire layout: fields in declaration order, no field names on the wire."
   echo "Config: little-endian, fixed 8-byte length prefixes\n"
 
@@ -154,6 +183,7 @@ proc main() {.raises: [BincodeError, IOError, BincodeConfigError].} =
   demoVecByte(cfg)
   demoVecString(cfg)
   demoMixedRecord(cfg)
+  demoBytesNewtype(cfg)
   demoDeserializeAt(cfg)
 
   echo "All demos passed."

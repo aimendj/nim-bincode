@@ -4,10 +4,12 @@
 {.push raises: [], gcsafe.}
 
 import faststreams
-import stew/[endians2, leb128]
+import stew/endians2
 import bincode_config
 import bincode_common
 import bincode_helpers
+
+export serializeString, decodePrefixedString, serializeBincodeU32, deserializeBincodeU32
 
 ## Plain scalar and collection field encoding (Rust ``Encode`` for struct fields).
 ##
