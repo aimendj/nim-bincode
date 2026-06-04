@@ -759,6 +759,8 @@ proc genWrapperDeserialize(typeSym: NimNode): NimNode =
         raise newException(BincodeError, "Trailing bytes after value")
       value
 
+var deriveBincodeImportsEmitted {.compileTime.} = false
+
 macro deriveBincode*(typ: typed): untyped =
   ## Generate ``serializeType`` / ``deserialize`` procs for a type (e.g. ``deriveBincode(Person)``).
   let typeName =
@@ -804,14 +806,17 @@ macro deriveBincode*(typ: typed): untyped =
       `serName`(stream, value, config)
       stream.getOutput()
 
-  quote do:
-    import bincode_common
-    import bincode_config
-    import bincode_fields
-    import faststreams
-    `ser`
-    `deserAt`
-    `deserWrap`
-    `toSeq`
+  result = newStmtList()
+  if not deriveBincodeImportsEmitted:
+    deriveBincodeImportsEmitted = true
+    result.add quote do:
+      import bincode_common
+      import bincode_config
+      import bincode_fields
+      import faststreams
+  result.add ser
+  result.add deserAt
+  result.add deserWrap
+  result.add toSeq
 
 {.pop.}
