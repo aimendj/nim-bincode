@@ -18,20 +18,18 @@ For running the optional Rust test harness and cross-verification:
 
 ### Install Nim dependencies
 
-Before building Nim code, initialize the git submodules:
+Before building Nim code, install dependencies from `bincode.nimble` (including [stew](https://github.com/status-im/nim-stew) for endian/LEB128 utilities and `deriveBincode` macro helpers):
 
 ```bash
 make install-deps
 ```
 
-This initializes the `stew` git submodule (required for endian conversion utilities) in the `nim-stew` directory.
+This runs `nimble develop`, which fetches stew, faststreams, and other Nimble deps and wires them into the local build.
 
-Alternatively, if cloning the repository for the first time:
+Alternatively:
 
 ```bash
-git clone --recursive <repository-url>
-# or after cloning
-git submodule update --init --recursive
+nimble develop
 ```
 
 ### Makefile Targets
@@ -50,7 +48,7 @@ The project includes a Makefile for common tasks:
 - `make test-cross-fixed4` - Run Nim fixed 4-byte length-prefix roundtrip tests (no Rust)
 - `make test-markers` - Run marker byte prefix verification tests (0xfb, 0xfc, 0xfd)
 - `make benchmark` - Run performance benchmarks (Rust vs Nim)
-- `make install-deps` - Initialize git submodules (stew)
+- `make install-deps` - Install Nim dependencies (`nimble develop`)
 - `make format` - Format all Nim files
 - `make format-check` - Check if Nim files are formatted
 - `make clean` - Clean all build artifacts
@@ -252,6 +250,7 @@ nph --diff src/bincode.nim
 
 ```
 .
+├── bincode.nimble          # Nim package manifest (stew, faststreams, …)
 ├── Cargo.toml              # Rust test harness configuration
 ├── Makefile                # Build and test automation
 ├── src/
@@ -265,7 +264,6 @@ nph --diff src/bincode.nim
 │       ├── example.nim
 │       ├── struct_example.nim
 │       └── derive_example.nim
-├── nim-stew/               # Git submodule (stew dependency)
 ├── tests/
 │   ├── bincode_format.rs
 │   ├── cross_verification.rs

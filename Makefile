@@ -20,15 +20,15 @@ help:
 	@echo "  make test-markers   - Run marker byte prefix verification tests (0xfb, 0xfc, 0xfd)"
 	@echo "  make format         - Format all Nim files"
 	@echo "  make format-check   - Check if Nim files are formatted"
-	@echo "  make install-deps   - Install/vendor Nim dependencies (stew)"
+	@echo "  make install-deps   - Install Nim dependencies (nimble develop)"
 	@echo "  make benchmark      - Run performance benchmarks (Rust vs Nim)"
 	@echo "  make clean          - Clean build artifacts"
 
-# Install/vendor Nim dependencies
+# Install Nim dependencies (stew, faststreams, etc.) via nimble
 install-deps:
-	@echo "Initializing git submodules..."
-	@git submodule update --init --recursive
-	@echo "Dependencies installed via git submodules"
+	@echo "Installing Nim dependencies..."
+	nimble develop -y
+	@echo "Dependencies installed via nimble"
 
 # Build Nim (examples)
 build: install-deps
