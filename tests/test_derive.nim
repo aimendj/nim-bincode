@@ -40,6 +40,13 @@ type BlockHeader* = object
 
 deriveBincode(BlockHeader)
 
+const FakeSigSize = 64
+
+type FakeSignature* = object
+  data*: array[FakeSigSize, byte]
+
+deriveBincode(FakeSignature, lengthPrefixed = true)
+
 suite "deriveBincode":
   let cfg =
     standard().withLittleEndian().withFixedIntEncoding(8).withLimit(65536'u64)
@@ -73,5 +80,19 @@ suite "deriveBincode":
     let back = deserializeBlockHeader(wire, cfg)
     check back.height == 42'u64
     check back.author.data == key.data
+
+  test "roundtrip FakeSignature with lengthPrefixed":
+    var sig: FakeSignature
+    for i in 0 ..< FakeSigSize:
+      sig.data[i] = byte(i)
+    let wire = serializeFakeSignatureToSeq(sig, cfg)
+    check wire.len == 8 + FakeSigSize
+    let back = deserializeFakeSignature(wire, cfg)
+    check back.data == sig.data
+
+  test "Packet flags still length-prefixed when lengthPrefixed false":
+    let pkt = Packet(id: 0'u32, flags: @[byte(1), 2, 3], score: 0'f32)
+    let wire = serializePacketToSeq(pkt, cfg)
+    check wire.len > 3 + 8
 
 {.pop.}

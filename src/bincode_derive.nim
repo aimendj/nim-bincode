@@ -271,8 +271,12 @@ func bincodeDeserializeName(typeSym: NimNode): NimNode =
 func bincodeSerializeToSeqName(typeSym: NimNode): NimNode =
   ident("serialize" & $typeSym & "ToSeq")
 
+func isByteElemType(elem: NimNode): bool =
+  typeSymName(skipTypeModifiers(elem)) == "byte"
+
 func buildSerializeAccess(
-    info: TypeInfo, access, streamSym, configSym: NimNode, fieldTyp: NimNode = nil
+    info: TypeInfo, access, streamSym, configSym: NimNode,
+    fieldTyp: NimNode = nil, lengthPrefixed: bool = false,
 ): NimNode =
   case info.kind
   of fkBool:
@@ -294,7 +298,7 @@ func buildSerializeAccess(
     let elemInfo = classifyType(info.elemType)
     let itemSym = bindIdent("item")
     let elemSer = buildSerializeAccess(
-      elemInfo, itemSym, streamSym, configSym, info.elemType
+      elemInfo, itemSym, streamSym, configSym, info.elemType, lengthPrefixed
     )
     let lenExpr = newTree(
       nnkDotExpr, newDotExpr(access, bindIdent("len")), bindIdent("uint64")
@@ -304,11 +308,13 @@ func buildSerializeAccess(
       newTree(nnkForStmt, itemSym, access, newStmtList(elemSer)),
     )
   of fkArray:
+    if lengthPrefixed and isByteElemType(info.elemType):
+      return newCall(ident"serialize", streamSym, access, configSym)
     let elemInfo = classifyType(info.elemType)
     let iSym = bindIdent("i")
     let elemAccess = newTree(nnkBracketExpr, access, iSym)
     let elemSer = buildSerializeAccess(
-      elemInfo, elemAccess, streamSym, configSym, info.elemType
+      elemInfo, elemAccess, streamSym, configSym, info.elemType, lengthPrefixed
     )
     return newTree(
       nnkForStmt,
@@ -324,12 +330,16 @@ func buildSerializeAccess(
       configSym,
     )
   of fkBytesNewtype:
-    let ft = newtypeDataArrayBracket(fieldTyp)
     let dataAcc = newTree(nnkDotExpr, access, bindIdent("data"))
+    if lengthPrefixed:
+      return newCall(ident"serialize", streamSym, dataAcc, configSym)
+    let ft = newtypeDataArrayBracket(fieldTyp)
     let arrInfo = TypeInfo(
       kind: fkArray, arrayLen: ft[1], elemType: newIdentNode("by" & "te")
     )
-    buildSerializeAccess(arrInfo, dataAcc, streamSym, configSym)
+    buildSerializeAccess(
+      arrInfo, dataAcc, streamSym, configSym, lengthPrefixed = lengthPrefixed
+    )
   of fkObject:
     newCall(bincodeSerializeName(info.typeSym), streamSym, access, configSym)
 
@@ -356,6 +366,7 @@ func decodeProcFor(info: TypeInfo): NimNode =
 func buildDecodeField(
     fieldName: NimNode, tmpSym: NimNode, info: TypeInfo,
     dataSym, configSym, offSym: NimNode, fieldTyp: NimNode = nil,
+    lengthPrefixed: bool = false,
 ): NimNode =
   let nSym = newIdentNode("bn_" & $fieldName)
   case info.kind
@@ -437,36 +448,59 @@ func buildDecodeField(
           `offSym` += `nItemSym`
           `tmpSym`[i] = `itemSym`
   of fkArray:
-    let elemInfo = classifyType(info.elemType)
     let n = info.arrayLen
-    let itemSym = bindIdent("item")
-    let nItemSym = bindIdent("nItem")
-    if elemInfo.kind == fkObject:
-      let elemAt = bincodeDeserializeAtName(elemInfo.typeSym)
+    if lengthPrefixed and isByteElemType(info.elemType):
       quote do:
-        for i in 0 ..< `n`:
-          let (`itemSym`, `nItemSym`) = `elemAt`(`dataSym`, `configSym`, `offSym`)
-          `offSym` += `nItemSym`
-          `tmpSym`[i] = `itemSym`
+        let (blob, nb) = decodePrefixedByteSeq(`dataSym`, `configSym`, `offSym`)
+        `offSym` += nb
+        if blob.len != int(`n`):
+          raise newException(BincodeError, "fixed byte array length mismatch")
+        for i in 0 ..< int(`n`):
+          `tmpSym`[i] = blob[i]
     else:
-      let elemDec = decodeProcFor(elemInfo)
-      quote do:
-        for i in 0 ..< `n`:
-          let (`itemSym`, `nItemSym`) = `elemDec`(`dataSym`, `configSym`, `offSym`)
-          `offSym` += `nItemSym`
-          `tmpSym`[i] = `itemSym`
+      let elemInfo = classifyType(info.elemType)
+      let itemSym = bindIdent("item")
+      let nItemSym = bindIdent("nItem")
+      if elemInfo.kind == fkObject:
+        let elemAt = bincodeDeserializeAtName(elemInfo.typeSym)
+        quote do:
+          for i in 0 ..< `n`:
+            let (`itemSym`, `nItemSym`) = `elemAt`(`dataSym`, `configSym`, `offSym`)
+            `offSym` += `nItemSym`
+            `tmpSym`[i] = `itemSym`
+      else:
+        let elemDec = decodeProcFor(elemInfo)
+        quote do:
+          for i in 0 ..< `n`:
+            let (`itemSym`, `nItemSym`) = `elemDec`(`dataSym`, `configSym`, `offSym`)
+            `offSym` += `nItemSym`
+            `tmpSym`[i] = `itemSym`
   of fkBytesNewtype:
     let ft = newtypeDataArrayBracket(fieldTyp)
-    let arrInfo = TypeInfo(
-      kind: fkArray, arrayLen: ft[1], elemType: newIdentNode("by" & "te")
-    )
+    let n = ft[1]
     let dataAccess = newTree(nnkDotExpr, tmpSym, bindIdent("data"))
-    newStmtList(
+    if lengthPrefixed:
       quote do:
         var `tmpSym`: `fieldTyp`
-      ,
-      buildDecodeField(fieldName, dataAccess, arrInfo, dataSym, configSym, offSym),
-    )
+        let (blob, nb) = decodePrefixedByteSeq(`dataSym`, `configSym`, `offSym`)
+        `offSym` += nb
+        if blob.len != int(`n`):
+          raise newException(BincodeError, "bytes newtype length mismatch")
+        for i in 0 ..< int(`n`):
+          `dataAccess`[i] = blob[i]
+    else:
+      let arrInfo = TypeInfo(
+        kind: fkArray, arrayLen: ft[1], elemType: newIdentNode("by" & "te")
+      )
+      newStmtList(
+        quote do:
+          var `tmpSym`: `fieldTyp`
+        ,
+        buildDecodeField(
+          fieldName, dataAccess, arrInfo, dataSym, configSym, offSym,
+          lengthPrefixed = lengthPrefixed,
+        ),
+      )
   of fkObject:
     let deserAt = bincodeDeserializeAtName(info.typeSym)
     quote do:
@@ -489,12 +523,16 @@ proc branchOrdinal(branch: NimNode): NimNode =
       return branch[0][0]
   branch
 
-proc genArrayAliasSerialize(typeSym: NimNode, arrayBody: NimNode): NimNode =
+proc genArrayAliasSerialize(
+    typeSym: NimNode, arrayBody: NimNode, lengthPrefixed: bool
+): NimNode =
   let info = TypeInfo(kind: fkArray, arrayLen: arrayBody[1], elemType: arrayBody[2])
   let streamId = bindIdent("stream")
   let valueId = bindIdent("value")
   let configId = bindIdent("config")
-  let body = buildSerializeAccess(info, valueId, streamId, configId)
+  let body = buildSerializeAccess(
+    info, valueId, streamId, configId, lengthPrefixed = lengthPrefixed
+  )
   let serName = bincodeSerializeName(typeSym)
   quote do:
     proc `serName`*(
@@ -503,7 +541,9 @@ proc genArrayAliasSerialize(typeSym: NimNode, arrayBody: NimNode): NimNode =
     ) {.raises: [BincodeError, IOError].} =
       `body`
 
-proc genArrayAliasDeserializeAt(typeSym: NimNode, arrayBody: NimNode): NimNode =
+proc genArrayAliasDeserializeAt(
+    typeSym: NimNode, arrayBody: NimNode, lengthPrefixed: bool
+): NimNode =
   let info = TypeInfo(kind: fkArray, arrayLen: arrayBody[1], elemType: arrayBody[2])
   let dataId = bindIdent("data")
   let configId = bindIdent("config")
@@ -511,7 +551,8 @@ proc genArrayAliasDeserializeAt(typeSym: NimNode, arrayBody: NimNode): NimNode =
   let startId = bindIdent("start")
   let resultSym = bindIdent("bcResult")
   let decodeStmts = buildDecodeField(
-    newIdentNode("_"), resultSym, info, dataId, configId, offId
+    newIdentNode("_"), resultSym, info, dataId, configId, offId,
+    lengthPrefixed = lengthPrefixed,
   )
   let deserAtName = bincodeDeserializeAtName(typeSym)
   quote do:
@@ -551,7 +592,8 @@ proc genEnumDeserializeAt(typeSym, impl: NimNode): NimNode =
       return (value, off - start)
 
 proc genObjectSerialize(
-    typeSym: NimNode, typeImpl: NimNode, fields: seq[FieldDescription]
+    typeSym: NimNode, typeImpl: NimNode, fields: seq[FieldDescription],
+    lengthPrefixed: bool,
 ): NimNode =
   let streamId = bindIdent("stream")
   let valueId = bindIdent("value")
@@ -569,7 +611,7 @@ proc genObjectSerialize(
         continue
       let acc = newTree(nnkDotExpr, valueId, fieldIdent(f.name))
       body.add buildSerializeAccess(
-        classifyType(f.typ), acc, streamId, configId, f.typ
+        classifyType(f.typ), acc, streamId, configId, f.typ, lengthPrefixed
       )
     let serName = bincodeSerializeName(typeSym)
     quote do:
@@ -607,7 +649,7 @@ proc genObjectSerialize(
       for f in branchMap.getOrDefault(key):
         let acc = newTree(nnkDotExpr, valueId, fieldIdent(f.name))
         armBody.add buildSerializeAccess(
-          classifyType(f.typ), acc, streamId, configId, f.typ
+          classifyType(f.typ), acc, streamId, configId, f.typ, lengthPrefixed
         )
       caseStmt.add newTree(nnkOfBranch, branchId, armBody)
 
@@ -620,7 +662,8 @@ proc genObjectSerialize(
         `caseStmt`
 
 proc genObjectDeserializeAt(
-    typeSym: NimNode, typeImpl: NimNode, fields: seq[FieldDescription]
+    typeSym: NimNode, typeImpl: NimNode, fields: seq[FieldDescription],
+    lengthPrefixed: bool,
 ): NimNode =
   let dataId = bindIdent("data")
   let configId = bindIdent("config")
@@ -646,19 +689,19 @@ proc genObjectDeserializeAt(
         if info.kind == fkBytesNewtype:
           let tmpId = newIdentNode("bc_" & $fname)
           decodeStmts.add buildDecodeField(
-            fname, tmpId, info, dataId, configId, offId, f.typ
+            fname, tmpId, info, dataId, configId, offId, f.typ, lengthPrefixed
           )
           assignStmts.add newTree(
             nnkAsgn, newDotExpr(resultSym, fname), tmpId
           )
         else:
           decodeStmts.add buildDecodeField(
-            fname, access, info, dataId, configId, offId, f.typ
+            fname, access, info, dataId, configId, offId, f.typ, lengthPrefixed
           )
       else:
         let tmpId = newIdentNode("bc_" & $fname)
         decodeStmts.add buildDecodeField(
-          fname, tmpId, info, dataId, configId, offId, f.typ
+          fname, tmpId, info, dataId, configId, offId, f.typ, lengthPrefixed
         )
         assignStmts.add newTree(
           nnkAsgn, newDotExpr(resultSym, fname), tmpId
@@ -701,18 +744,18 @@ proc genObjectDeserializeAt(
           if info.kind == fkBytesNewtype:
             let tmpId = newIdentNode("bc_" & $fname)
             decodeStmts.add buildDecodeField(
-              fname, tmpId, info, dataId, configId, offId, f.typ
+              fname, tmpId, info, dataId, configId, offId, f.typ, lengthPrefixed
             )
             assignStmts.add newTree(nnkAsgn, newDotExpr(resultSym, fname), tmpId)
           else:
             let access = newDotExpr(resultSym, fname)
             decodeStmts.add buildDecodeField(
-              fname, access, info, dataId, configId, offId, f.typ
+              fname, access, info, dataId, configId, offId, f.typ, lengthPrefixed
             )
         else:
           let tmpId = newIdentNode("bc_" & $fname)
           decodeStmts.add buildDecodeField(
-            fname, tmpId, info, dataId, configId, offId, f.typ
+            fname, tmpId, info, dataId, configId, offId, f.typ, lengthPrefixed
           )
           assignStmts.add newTree(nnkAsgn, newDotExpr(resultSym, fname), tmpId)
       var armStmt = newStmtList()
@@ -761,8 +804,15 @@ proc genWrapperDeserialize(typeSym: NimNode): NimNode =
 
 var deriveBincodeImportsEmitted {.compileTime.} = false
 
-macro deriveBincode*(typ: typed): untyped =
-  ## Generate ``serializeType`` / ``deserialize`` procs for a type (e.g. ``deriveBincode(Person)``).
+macro deriveBincode*(
+    typ: typed, lengthPrefixed: static[bool] = false
+): untyped =
+  ## Generate ``serializeType`` / ``deserialize`` procs for a type.
+  ##
+  ## ``lengthPrefixed`` (default ``false``): when ``true``, fixed byte blobs
+  ## (``array[N, byte]`` and ``data: array[N, byte]`` newtypes) are encoded
+  ## with a length prefix like Rust ``serialize_bytes``. ``seq``/``string``
+  ## fields always use a prefix regardless of this flag.
   let typeName =
     if typ.kind == nnkSym:
       typ
@@ -778,8 +828,8 @@ macro deriveBincode*(typ: typed): untyped =
     deserAt = genEnumDeserializeAt(typeName, impl)
   elif body.kind in {nnkObjectTy, nnkRefTy}:
     let fields = recordFields(impl)
-    ser = genObjectSerialize(typeName, impl, fields)
-    deserAt = genObjectDeserializeAt(typeName, impl, fields)
+    ser = genObjectSerialize(typeName, impl, fields, lengthPrefixed)
+    deserAt = genObjectDeserializeAt(typeName, impl, fields, lengthPrefixed)
   elif body.kind == nnkBracketExpr:
     let head =
       if body[0].kind == nnkSym:
@@ -790,8 +840,8 @@ macro deriveBincode*(typ: typed): untyped =
         ""
     if head != "array":
       error("deriveBincode: unsupported type kind for " & $typeName)
-    ser = genArrayAliasSerialize(typeName, body)
-    deserAt = genArrayAliasDeserializeAt(typeName, body)
+    ser = genArrayAliasSerialize(typeName, body, lengthPrefixed)
+    deserAt = genArrayAliasDeserializeAt(typeName, body, lengthPrefixed)
   else:
     error("deriveBincode: unsupported type kind for " & $typeName)
 
