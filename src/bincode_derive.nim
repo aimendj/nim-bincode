@@ -224,9 +224,8 @@ func classifyType(typ: NimNode): TypeInfo =
         return TypeInfo(kind: fkArray, arrayLen: ab[1], elemType: ab[2])
       if isEnumType(t):
         return TypeInfo(kind: fkEnum, typeSym: t)
-      let wrap = tryByteArrayWrapper(t)
-      if wrap.kind == fkBytesNewtype:
-        return wrap
+      ## Bytes newtypes (``data: array[N, byte]``) and other objects call
+      ## ``serializeB`` so each type's ``deriveBincode`` options apply when nested.
       return TypeInfo(kind: fkObject, typeSym: t)
     else:
       error("deriveBincode: unsupported field type: " & name)

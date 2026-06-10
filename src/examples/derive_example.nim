@@ -59,8 +59,10 @@ deriveBincode(Record)
 const DigestSize = 32
 
 type Digest* = object
-  ## Fixed-size blob in one field — same shape as ``EdPublicKey``; no extra derive.
+  ## Fixed-size blob in one field — same shape as ``EdPublicKey``.
   data*: array[DigestSize, byte]
+
+deriveBincode(Digest)
 
 type Row* = object
   id*: Digest
