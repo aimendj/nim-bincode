@@ -65,6 +65,21 @@ type KeyWrapper* = object
 
 deriveBincode(KeyWrapper)
 
+type
+  Hash32* = array[32, byte]
+  References* = array[4, Hash32]
+  Proposal* = object
+    references*: References
+    value*: uint64
+
+deriveBincode(Proposal)
+
+type
+  SeqArrayObj* = object
+    matrix*: seq[array[3, uint32]]
+
+deriveBincode(SeqArrayObj)
+
 suite "deriveBincode":
   let cfg =
     standard().withLittleEndian().withFixedIntEncoding(8).withLimit(65536'u64)
@@ -180,5 +195,24 @@ suite "deriveBincode":
     let pkt = Packet(id: 0'u32, flags: @[byte(1), 2, 3], score: 0'f32)
     let wire = serializePacketToSeq(pkt, cfg)
     check wire.len > 3 + 8
+
+  test "roundtrip Proposal (nested 2D array)":
+    var prop: Proposal
+    for i in 0 ..< 4:
+      for j in 0 ..< 32:
+        prop.references[i][j] = byte(i * 32 + j)
+    prop.value = 1337'u64
+    let wire = serializeProposalToSeq(prop, cfg)
+    check wire.len == 4 * 32 + 8
+    let back = deserializeProposal(wire, cfg)
+    check back.value == 1337'u64
+    check back.references == prop.references
+
+  test "roundtrip SeqArrayObj (sequence of arrays)":
+    var obj = SeqArrayObj(matrix: @[[1'u32, 2, 3], [4'u32, 5, 6]])
+    let wire = serializeSeqArrayObjToSeq(obj, cfg)
+    check wire.len == 32
+    let back = deserializeSeqArrayObj(wire, cfg)
+    check back.matrix == obj.matrix
 
 {.pop.}

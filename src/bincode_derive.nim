@@ -295,7 +295,7 @@ func buildSerializeAccess(
     newCall(ident"serialize", streamSym, access, configSym)
   of fkSeq:
     let elemInfo = classifyType(info.elemType)
-    let itemSym = bindIdent("item")
+    let itemSym = genSym(nskForVar, "item")
     let elemSer = buildSerializeAccess(
       elemInfo, itemSym, streamSym, configSym, info.elemType, lengthPrefixed
     )
@@ -310,7 +310,7 @@ func buildSerializeAccess(
     if lengthPrefixed and isByteElemType(info.elemType):
       return newCall(ident"serialize", streamSym, access, configSym)
     let elemInfo = classifyType(info.elemType)
-    let iSym = bindIdent("i")
+    let iSym = genSym(nskForVar, "i")
     let elemAccess = newTree(nnkBracketExpr, access, iSym)
     let elemSer = buildSerializeAccess(
       elemInfo, elemAccess, streamSym, configSym, info.elemType, lengthPrefixed
@@ -384,96 +384,126 @@ func buildDecodeField(
         (cast[`enumTy`](int(`discSym`)), n0)
       `offSym` += `nSym`
   of fkSeq:
-    let fq =
-      block:
-        let id = fieldIdent(fieldName)
-        if id.kind == nnkIdent and $id == "_":
-          "_root"
-        else:
-          $id
-    let lenValSym = bindIdent("lenVal_" & fq)
-    let nLenSym = bindIdent("nLen_" & fq)
-    let itemSym = bindIdent("item_" & fq)
-    let nItemSym = bindIdent("nItem_" & fq)
+    let lenValSym = genSym(nskLet, "lenVal")
+    let nLenSym = genSym(nskLet, "nLen")
     let elemInfo = classifyType(info.elemType)
     let elemT = skipTypeModifiers(info.elemType)
     if elemInfo.kind == fkObject:
       let elemAt = bincodeDeserializeAtName(elemInfo.typeSym)
+      let iSym = genSym(nskForVar, "i")
+      let itemSymVal = genSym(nskLet, "itemVal")
+      let nItemSym = genSym(nskLet, "nItem")
       quote do:
         let (`lenValSym`, `nLenSym`) =
           decodeLength(`dataSym`.toOpenArray(`offSym`, `dataSym`.high), `configSym`)
         `offSym` += `nLenSym`
         var `tmpSym` = newSeq[`elemT`](`lenValSym`.int)
-        for i in 0 ..< `tmpSym`.len:
-          let (`itemSym`, `nItemSym`) = `elemAt`(`dataSym`, `configSym`, `offSym`)
+        for `iSym` in 0 ..< `tmpSym`.len:
+          let (`itemSymVal`, `nItemSym`) = `elemAt`(`dataSym`, `configSym`, `offSym`)
           `offSym` += `nItemSym`
-          `tmpSym`[i] = `itemSym`
+          `tmpSym`[`iSym`] = `itemSymVal`
     elif elemInfo.kind == fkArray:
-      let inner = classifyType(elemInfo.elemType)
-      let innerDec = decodeProcFor(inner)
-      let n = elemInfo.arrayLen
+      let iSym = genSym(nskForVar, "i")
+      let itemSym = genSym(nskVar, "item")
+      let innerDec = buildDecodeField(
+        fieldName, itemSym, elemInfo, dataSym, configSym, offSym, elemT, lengthPrefixed
+      )
       quote do:
         let (`lenValSym`, `nLenSym`) =
           decodeLength(`dataSym`.toOpenArray(`offSym`, `dataSym`.high), `configSym`)
         `offSym` += `nLenSym`
         var `tmpSym` = newSeq[`elemT`](`lenValSym`.int)
-        for i in 0 ..< `tmpSym`.len:
-          for j in 0 ..< `n`:
-            let (b, nb) = `innerDec`(`dataSym`, `configSym`, `offSym`)
-            `offSym` += nb
-            `tmpSym`[i][j] = b
-    elif elemInfo.kind == fkBytesNewtype:
-      let n = newtypeDataArrayBracket(elemT)[1]
-      let innerDec = ident"deserializeBincodeU8"
+        for `iSym` in 0 ..< `tmpSym`.len:
+          block:
+            var `itemSym`: `elemT`
+            `innerDec`
+            `tmpSym`[`iSym`] = `itemSym`
+    elif elemInfo.kind in {fkBytesNewtype, fkSeq}:
+      let iSym = genSym(nskForVar, "i")
+      let itemSym = genSym(nskVar, "item")
+      let innerDec = buildDecodeField(
+        fieldName, itemSym, elemInfo, dataSym, configSym, offSym, elemT, lengthPrefixed
+      )
       quote do:
         let (`lenValSym`, `nLenSym`) =
           decodeLength(`dataSym`.toOpenArray(`offSym`, `dataSym`.high), `configSym`)
         `offSym` += `nLenSym`
         var `tmpSym` = newSeq[`elemT`](`lenValSym`.int)
-        for i in 0 ..< `tmpSym`.len:
-          for j in 0 ..< `n`:
-            let (b, nb) = `innerDec`(`dataSym`, `configSym`, `offSym`)
-            `offSym` += nb
-            `tmpSym`[i].data[j] = b
+        for `iSym` in 0 ..< `tmpSym`.len:
+          block:
+            `innerDec`
+            `tmpSym`[`iSym`] = `itemSym`
     else:
       let elemDec = decodeProcFor(elemInfo)
+      let iSym = genSym(nskForVar, "i")
+      let itemSymVal = genSym(nskLet, "itemVal")
+      let nItemSym = genSym(nskLet, "nItem")
       quote do:
         let (`lenValSym`, `nLenSym`) =
           decodeLength(`dataSym`.toOpenArray(`offSym`, `dataSym`.high), `configSym`)
         `offSym` += `nLenSym`
         var `tmpSym` = newSeq[`elemT`](`lenValSym`.int)
-        for i in 0 ..< `tmpSym`.len:
-          let (`itemSym`, `nItemSym`) = `elemDec`(`dataSym`, `configSym`, `offSym`)
+        for `iSym` in 0 ..< `tmpSym`.len:
+          let (`itemSymVal`, `nItemSym`) = `elemDec`(`dataSym`, `configSym`, `offSym`)
           `offSym` += `nItemSym`
-          `tmpSym`[i] = `itemSym`
+          `tmpSym`[`iSym`] = `itemSymVal`
   of fkArray:
     let n = info.arrayLen
     if lengthPrefixed and isByteElemType(info.elemType):
+      let iSym = genSym(nskForVar, "i")
       quote do:
         let (blob, nb) = decodePrefixedByteSeq(`dataSym`, `configSym`, `offSym`)
         `offSym` += nb
         if blob.len != int(`n`):
           raise newException(BincodeError, "fixed byte array length mismatch")
-        for i in 0 ..< int(`n`):
-          `tmpSym`[i] = blob[i]
+        for `iSym` in 0 ..< int(`n`):
+          `tmpSym`[`iSym`] = blob[`iSym`]
     else:
       let elemInfo = classifyType(info.elemType)
-      let itemSym = bindIdent("item")
-      let nItemSym = bindIdent("nItem")
+      let elemT = skipTypeModifiers(info.elemType)
       if elemInfo.kind == fkObject:
         let elemAt = bincodeDeserializeAtName(elemInfo.typeSym)
+        let iSym = genSym(nskForVar, "i")
+        let itemSymVal = genSym(nskLet, "itemVal")
+        let nItemSym = genSym(nskLet, "nItem")
         quote do:
-          for i in 0 ..< `n`:
-            let (`itemSym`, `nItemSym`) = `elemAt`(`dataSym`, `configSym`, `offSym`)
+          for `iSym` in 0 ..< `n`:
+            let (`itemSymVal`, `nItemSym`) = `elemAt`(`dataSym`, `configSym`, `offSym`)
             `offSym` += `nItemSym`
-            `tmpSym`[i] = `itemSym`
+            `tmpSym`[`iSym`] = `itemSymVal`
+      elif elemInfo.kind == fkArray:
+        let iSym = genSym(nskForVar, "i")
+        let itemSym = genSym(nskVar, "item")
+        let innerDec = buildDecodeField(
+          fieldName, itemSym, elemInfo, dataSym, configSym, offSym, elemT, lengthPrefixed
+        )
+        quote do:
+          for `iSym` in 0 ..< `n`:
+            block:
+              var `itemSym`: `elemT`
+              `innerDec`
+              `tmpSym`[`iSym`] = `itemSym`
+      elif elemInfo.kind in {fkBytesNewtype, fkSeq}:
+        let iSym = genSym(nskForVar, "i")
+        let itemSym = genSym(nskVar, "item")
+        let innerDec = buildDecodeField(
+          fieldName, itemSym, elemInfo, dataSym, configSym, offSym, elemT, lengthPrefixed
+        )
+        quote do:
+          for `iSym` in 0 ..< `n`:
+            block:
+              `innerDec`
+              `tmpSym`[`iSym`] = `itemSym`
       else:
         let elemDec = decodeProcFor(elemInfo)
+        let iSym = genSym(nskForVar, "i")
+        let itemSymVal = genSym(nskLet, "itemVal")
+        let nItemSym = genSym(nskLet, "nItem")
         quote do:
-          for i in 0 ..< `n`:
-            let (`itemSym`, `nItemSym`) = `elemDec`(`dataSym`, `configSym`, `offSym`)
+          for `iSym` in 0 ..< `n`:
+            let (`itemSymVal`, `nItemSym`) = `elemDec`(`dataSym`, `configSym`, `offSym`)
             `offSym` += `nItemSym`
-            `tmpSym`[i] = `itemSym`
+            `tmpSym`[`iSym`] = `itemSymVal`
   of fkBytesNewtype:
     let ft = newtypeDataArrayBracket(fieldTyp)
     let n = ft[1]
