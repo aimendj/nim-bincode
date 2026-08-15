@@ -12,10 +12,9 @@ requires "nim >= 2.2.4"
 requires "stew >= 0.4.2"
 requires "unittest2"
 requires "faststreams"
+requires "serialization"
 
 # Tasks
 
 task test, "Run all Nim tests":
-  exec "nim c -r tests/test_bincode_config.nim"
-  exec "nim c -r tests/test_bincode.nim"
-  exec "nim c -r tests/test_derive.nim"
+  exec "nim c -r tests/test_all.nim"

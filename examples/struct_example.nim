@@ -4,9 +4,7 @@
 {.push raises: [], gcsafe.}
 
 import faststreams
-import ../bincode
-import ../bincode_config
-import ../bincode_derive
+import bincode
 
 type Person* = object
   name*: string
@@ -32,30 +30,30 @@ deriveBincode(Packet)
 proc main() {.raises: [BincodeError, IOError, BincodeConfigError].} =
   echo "=== Struct example (deriveBincode) ===\n"
 
-  let cfg =
-    standard().withLittleEndian().withFixedIntEncoding(8).withLimit(65536'u64)
+  let cfg = standard().withLittleEndian().withFixedIntEncoding(8).withLimit(65536'u64)
 
   let person = Person(name: "Alice", age: 30'u32, email: "alice@example.com")
-  let personWire = serializePersonToSeq(person, cfg)
-  let personBack = deserializePerson(personWire, cfg)
+  let personWire = encode(person, cfg)
+  let personBack = decode(personWire, Person, cfg)
   echo "Person roundtrip: ",
-    personBack.name, " ", personBack.age, " ", personBack.email,
-    " (", personWire.len, " bytes)"
+    personBack.name, " ", personBack.age, " ", personBack.email, " (", personWire.len,
+    " bytes)"
 
-  let statusWire = serializeStatusToSeq(Status.Pending, cfg)
-  doAssert deserializeStatus(statusWire, cfg) == Status.Pending
+  let statusWire = encode(Status.Pending, cfg)
+  doAssert decode(statusWire, Status, cfg) == Status.Pending
   echo "Status roundtrip OK (", statusWire.len, " byte(s))"
 
   let packet = Packet(id: 7'u32, flags: @[byte(1), 2, 3], score: 3.14'f32)
-  let packetWire = serializePacketToSeq(packet, cfg)
-  let packetBack = deserializePacket(packetWire, cfg)
-  echo "Packet roundtrip: id=", packetBack.id, " flags=", packetBack.flags,
-    " score=", packetBack.score, " (", packetWire.len, " bytes)"
+  let packetWire = encode(packet, cfg)
+  let packetBack = decode(packetWire, Packet, cfg)
+  echo "Packet roundtrip: id=",
+    packetBack.id, " flags=", packetBack.flags, " score=", packetBack.score, " (",
+    packetWire.len, " bytes)"
 
   let data = @[byte(1), 2, 3, 4, 5]
   var dataStream = memoryOutput()
-  serialize(dataStream, data, cfg)
-  echo "Raw bytes roundtrip: ", deserialize(dataStream.getOutput(), cfg) == data
+  encode(dataStream, data, cfg)
+  echo "Raw bytes roundtrip: ", decode(dataStream.getOutput(), cfg) == data
 
 main()
 

@@ -68,15 +68,15 @@ The `src/bincode.nim` module provides the native Nim implementation. With this r
 ```nim
 import bincode
 
-# Serialize bytes
+# Encode bytes
 let data = @[byte(1), 2, 3, 4, 5]
-let serialized = serialize(data)
-let deserialized = deserialize(serialized)
+let encoded = encode(data)
+let decoded = decode(encoded, seq[byte])
 
-# Serialize strings
+# Encode strings
 let text = "Hello, world!"
-let serializedText = serializeString(text)
-let deserializedText = deserializeString(serializedText)
+let encodedText = encode(text)
+let decodedText = decode(encodedText, string)
 ```
 
 Compile your Nim program with:
@@ -87,7 +87,7 @@ nim c your_program.nim
 
 ### Structs and enums (`deriveBincode`)
 
-For Rust-like `#[derive(Encode, Decode)]`, use the `deriveBincode` macro on types you define. It generates `serializeType`, `deserializeType`, `deserializeTypeAt`, and `serializeTypeToSeq` procs (e.g. `serializePerson`, `deserializePerson`, `serializePersonToSeq`).
+For Rust-like `#[derive(Encode, Decode)]`, use the `deriveBincode` macro on types you define. It generates uniform `encode`, `decode`, `decodeAt`, `writeValue`, and `readValue` procedures for your types. You can also use `Bincode.encode(val)` / `Bincode.decode(bytes, Type)` via `nim-serialization`.
 
 Supported field types:
 
@@ -118,13 +118,54 @@ deriveBincode(Status)
 let cfg =
   standard().withLittleEndian().withFixedIntEncoding(8).withLimit(65536'u64)
 
-let wire = serializePersonToSeq(Person(name: "Alice", age: 30'u32), cfg)
-let back = deserializePerson(wire, cfg)
+let wire = encode(Person(name: "Alice", age: 30'u32), cfg)
+let back = decode(wire, Person, cfg)
+
+# Or via nim-serialization API:
+let serWire = Bincode.encode(Person(name: "Bob", age: 25'u32))
+let serBack = Bincode.decode(serWire, Person)
 ```
 
-See `src/examples/derive_example.nim` for strings, enums, `seq[byte]`, `seq[string]`, mixed structs, and hex dumps of the wire format.
+See `examples/derive_example.nim` for strings, enums, `seq[byte]`, `seq[string]`, mixed structs, and hex dumps of the wire format.
 
-You can also compose serializers by hand (`src/examples/struct_example.nim`) or use `serializeType` / `deserializeType` with custom `toBytes` / `fromBytes` procs.
+### Custom Encoded Types (`deriveBincodeCustom`)
+
+For domain-specific types with their own binary serialization (e.g. custom transactions, cryptographic signatures, or domain wrappers), use `deriveBincodeCustom(Type, encodeProc, decodeProc, [errorType])`. On the wire, these types are represented as length-prefixed byte sequences (`Vec<u8>` layout), seamlessly integrating into outer structs derived with `deriveBincode`:
+
+```nim
+type CustomPayload* = object
+  raw*: string
+
+func toBytes*(c: CustomPayload): seq[byte] =
+  @(c.raw.toOpenArrayByte(0, c.raw.high))
+
+func fromBytes*(b: openArray[byte]): CustomPayload =
+  var s = newString(b.len)
+  if b.len > 0:
+    copyMem(s[0].addr, b[0].unsafeAddr, b.len)
+  CustomPayload(raw: s)
+
+# Single-line registration:
+deriveBincodeCustom(CustomPayload, toBytes, fromBytes)
+
+type Envelope* = object
+  id*: uint64
+  payload*: CustomPayload
+  extra*: seq[CustomPayload]
+
+# Seamlessly integrates with deriveBincode on outer types:
+deriveBincode(Envelope)
+
+let env = Envelope(
+  id: 42'u64,
+  payload: CustomPayload(raw: "hello"),
+  extra: @[CustomPayload(raw: "world")]
+)
+
+let wire = encode(env)
+let back = decode(wire, Envelope)
+assert back == env
+```
 
 ### Configuration
 
@@ -138,8 +179,6 @@ let cfg = standard()
   .withFixedIntEncoding(8)   # 8-byte length prefixes for Vec/String
   .withLimit(65536'u64)
 ```
-
-Pass `cfg` to `serialize` / `deserialize`, derived-type procs, and field helpers such as `serializeBincodeU32` / `deserializeBincodeU32`.
 
 ### In Rust
 

@@ -1,6 +1,8 @@
 # Rust
 target/
+rust/target/
 Cargo.lock
+rust/Cargo.lock
 *.pdb
 
 # Generated files

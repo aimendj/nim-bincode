@@ -11,14 +11,11 @@
 
 import faststreams
 import stew/byteutils
-import ../bincode
-import ../bincode_config
-import ../bincode_derive
+import bincode
 
 # --- Single-kind types (one field each, easy to read on the wire) -------------
 
-type Named* = object
-  ## ``String`` on the wire: length prefix + UTF-8 bytes.
+type Named* = object ## ``String`` on the wire: length prefix + UTF-8 bytes.
   label*: string
 
 deriveBincode(Named)
@@ -58,8 +55,7 @@ deriveBincode(Record)
 
 const DigestSize = 32
 
-type Digest* = object
-  ## Fixed-size blob in one field — same shape as ``EdPublicKey``.
+type Digest* = object ## Fixed-size blob in one field — same shape as ``EdPublicKey``.
   data*: array[DigestSize, byte]
 
 deriveBincode(Digest)
@@ -73,9 +69,9 @@ deriveBincode(Row)
 proc demoString(cfg: BincodeConfig) {.raises: [BincodeError, IOError].} =
   echo "== string (Named.label) =="
   let v = Named(label: "hello-bincode")
-  let wire = serializeNamedToSeq(v, cfg)
+  let wire = encode(v, cfg)
   echo "  wire (", wire.len, " bytes): ", wire.toHex
-  let back = deserializeNamed(wire, cfg)
+  let back = decode(wire, Named, cfg)
   echo "  back: ", back.label
   doAssert back == v
   echo "  OK\n"
@@ -83,9 +79,9 @@ proc demoString(cfg: BincodeConfig) {.raises: [BincodeError, IOError].} =
 proc demoEnum(cfg: BincodeConfig) {.raises: [BincodeError, IOError].} =
   echo "== enum (Status) =="
   let v = Status.Paused
-  let wire = serializeStatusToSeq(v, cfg)
+  let wire = encode(v, cfg)
   echo "  wire (", wire.len, " bytes): ", wire.toHex
-  let back = deserializeStatus(wire, cfg)
+  let back = decode(wire, Status, cfg)
   echo "  back: ", back
   doAssert back == v
   echo "  OK\n"
@@ -94,10 +90,10 @@ proc demoVecByte(cfg: BincodeConfig) {.raises: [BincodeError, IOError].} =
   echo "== Vec<u8> / seq[byte] (Blob.data) =="
   let v = Blob(data: @[byte(1), 2, 3, 0xFF])
   var stream = memoryOutput()
-  serializeBlob(stream, v, cfg)
+  encode(stream, v, cfg)
   let wire = stream.getOutput()
   echo "  wire (", wire.len, " bytes): ", wire.toHex
-  let back = deserializeBlob(wire, cfg)
+  let back = decode(wire, Blob, cfg)
   echo "  back: ", back.data
   doAssert back == v
   echo "  OK\n"
@@ -105,9 +101,9 @@ proc demoVecByte(cfg: BincodeConfig) {.raises: [BincodeError, IOError].} =
 proc demoVecString(cfg: BincodeConfig) {.raises: [BincodeError, IOError].} =
   echo "== Vec<String> / seq[string] (TagList.names) =="
   let v = TagList(names: @["alpha", "beta", "gamma"])
-  let wire = serializeTagListToSeq(v, cfg)
+  let wire = encode(v, cfg)
   echo "  wire (", wire.len, " bytes): ", wire.toHex
-  let back = deserializeTagList(wire, cfg)
+  let back = decode(wire, TagList, cfg)
   echo "  back: ", back.names
   doAssert back == v
   echo "  OK\n"
@@ -121,9 +117,9 @@ proc demoMixedRecord(cfg: BincodeConfig) {.raises: [BincodeError, IOError].} =
     aliases: @["w1", "primary"],
     extra: Named(label: "nested-string"),
   )
-  let wire = serializeRecordToSeq(v, cfg)
+  let wire = encode(v, cfg)
   echo "  wire (", wire.len, " bytes): ", wire.toHex
-  let back = deserializeRecord(wire, cfg)
+  let back = decode(wire, Record, cfg)
   echo "  title=", back.title, " state=", back.state
   echo "  payload=", back.payload, " aliases=", back.aliases
   echo "  extra.label=", back.extra.label
@@ -136,17 +132,17 @@ proc demoBytesNewtype(cfg: BincodeConfig) {.raises: [BincodeError, IOError].} =
   for i in 0 ..< DigestSize:
     digest.data[i] = byte(i + 1)
   let v = Row(id: digest, seq: 100'u64)
-  let wire = serializeRowToSeq(v, cfg)
+  let wire = encode(v, cfg)
   echo "  wire (", wire.len, " bytes): ", wire.toHex
   echo "  layout: ", DigestSize, " byte id + 8 byte seq (fixed u64)"
-  let back = deserializeRow(wire, cfg)
+  let back = decode(wire, Row, cfg)
   echo "  back.seq=", back.seq
   echo "  back.id.data=", back.id.data.toHex
   doAssert back == v
   echo "  OK\n"
 
 proc demoDeserializeAt(cfg: BincodeConfig) {.raises: [BincodeError, IOError].} =
-  echo "== two Records in one buffer (deserializeRecordAt) =="
+  echo "== two Records in one buffer (decodeAt) =="
   let r1 = Record(
     title: "a",
     state: Status.Done,
@@ -161,12 +157,12 @@ proc demoDeserializeAt(cfg: BincodeConfig) {.raises: [BincodeError, IOError].} =
     aliases: @["y", "z"],
     extra: Named(label: "e2"),
   )
-  let blob = serializeRecordToSeq(r1, cfg) & serializeRecordToSeq(r2, cfg)
+  let blob = encode(r1, cfg) & encode(r2, cfg)
   echo "  blob (", blob.len, " bytes): ", blob.toHex
   var off = 0
-  let (a, n1) = deserializeRecordAt(blob, cfg, off)
+  let (a, n1) = decodeAt(blob, Record, cfg, off)
   off += n1
-  let (b, n2) = deserializeRecordAt(blob, cfg, off)
+  let (b, n2) = decodeAt(blob, Record, cfg, off)
   off += n2
   doAssert off == blob.len
   echo "  first.title=", a.title, " second.title=", b.title
@@ -177,8 +173,7 @@ proc main() {.raises: [BincodeError, IOError, BincodeConfigError].} =
   echo "Wire layout: fields in declaration order, no field names on the wire."
   echo "Config: little-endian, fixed 8-byte length prefixes\n"
 
-  let cfg =
-    standard().withLittleEndian().withFixedIntEncoding(8).withLimit(65536'u64)
+  let cfg = standard().withLittleEndian().withFixedIntEncoding(8).withLimit(65536'u64)
 
   demoString(cfg)
   demoEnum(cfg)

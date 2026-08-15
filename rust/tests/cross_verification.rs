@@ -71,10 +71,16 @@ fn format_vec_for_log(data: &[u8]) -> String {
     }
 }
 
+/// Get the path to target/test_data regardless of execution directory
+fn test_data_dir() -> PathBuf {
+    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into()));
+    manifest_dir.join("../target/test_data")
+}
+
 /// Serialize data with variable-length encoding and write to file
 fn serialize_to_file_variable(data: &[u8], filename: &str) -> Result<(), Box<dyn std::error::Error>> {
     let serialized = bincode::encode_to_vec(data, variable_config())?;
-    let test_dir = PathBuf::from("target/test_data");
+    let test_dir = test_data_dir();
     fs::create_dir_all(&test_dir)?;
     let file_path = test_dir.join(filename);
     fs::write(&file_path, &serialized)?;
@@ -83,7 +89,7 @@ fn serialize_to_file_variable(data: &[u8], filename: &str) -> Result<(), Box<dyn
 
 /// Deserialize data that was serialized with variable-length encoding
 fn deserialize_from_file_variable(filename: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let test_dir = PathBuf::from("target/test_data");
+    let test_dir = test_data_dir();
     let file_path = test_dir.join(filename);
     let serialized = fs::read(&file_path)?;
     let (deserialized, bytes_read): (Vec<u8>, _) = 
@@ -100,7 +106,7 @@ fn deserialize_from_file_variable(filename: &str) -> Result<Vec<u8>, Box<dyn std
 /// Serialize data with fixed 8-byte encoding and write to file
 fn serialize_to_file_fixed8(data: &[u8], filename: &str) -> Result<(), Box<dyn std::error::Error>> {
     let serialized = bincode::encode_to_vec(data, fixed8_config())?;
-    let test_dir = PathBuf::from("target/test_data");
+    let test_dir = test_data_dir();
     fs::create_dir_all(&test_dir)?;
     let file_path = test_dir.join(filename);
     fs::write(&file_path, &serialized)?;
@@ -109,7 +115,7 @@ fn serialize_to_file_fixed8(data: &[u8], filename: &str) -> Result<(), Box<dyn s
 
 /// Deserialize data that was serialized with fixed 8-byte encoding
 fn deserialize_from_file_fixed8(filename: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let test_dir = PathBuf::from("target/test_data");
+    let test_dir = test_data_dir();
     let file_path = test_dir.join(filename);
     let serialized = fs::read(&file_path)?;
     let (deserialized, bytes_read): (Vec<u8>, _) = 

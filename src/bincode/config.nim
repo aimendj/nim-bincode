@@ -21,9 +21,6 @@ type
       ## Integer encoding:
       ## - 0 = variable-length encoding (Rust bincode varint for lengths and wrapped integers)
       ## - 1, 2, 4, or 8 = fixed width for **container length prefixes** (``Vec``/string/blob)
-      ##   and for `serializeInt32`_ / `serializeUint32`_ / `serializeInt64`_ (Vec-wrapped).
-      ##   Plain scalar fields such as ``u32`` use `serializeBincodeU32`_ (always 4 bytes in
-      ##   fixed mode, independent of ``intSize``), matching Rust ``Encode for u32``.
     sizeLimit*: uint64
 
 const BINCODE_SIZE_LIMIT* = 65536'u64 # Default 64 KiB limit (matches bincode v2 default)
@@ -33,9 +30,6 @@ func standard*(): BincodeConfig =
   ## - Little-endian byte order
   ## - Fixed integer encoding (8-byte integers by default)
   ## - 64 KiB size limit
-  ##
-  ## This matches the current default behavior for backward compatibility.
-  ##
   BincodeConfig(byteOrder: LittleEndian, intSize: 8, sizeLimit: BINCODE_SIZE_LIMIT)
 
 func withLittleEndian*(config: BincodeConfig): BincodeConfig =
@@ -54,10 +48,6 @@ func withFixedIntEncoding*(
     config: BincodeConfig, size: int = 8
 ): BincodeConfig {.raises: [BincodeConfigError].} =
   ## Set integer encoding to fixed-size.
-  ##
-  ## `size` specifies the number of bytes to use (1, 2, 4, or 8).
-  ## If `size` is 0, it is treated as variable-length encoding.
-  ## Raises `BincodeConfigError` if size is not 0, 1, 2, 4, or 8.
   var output = config
   if size == 0:
     output.intSize = 0
@@ -70,8 +60,6 @@ func withFixedIntEncoding*(
 
 func withVariableIntEncoding*(config: BincodeConfig): BincodeConfig =
   ## Set integer encoding to variable-length (LEB128).
-  ##
-  ## This sets intSize to 0 to indicate variable encoding.
   var output = config
   output.intSize = 0
   output

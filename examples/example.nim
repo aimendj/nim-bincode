@@ -4,20 +4,19 @@
 {.push raises: [], gcsafe.}
 
 import faststreams # Uses: memoryOutput, getOutput
-import ../bincode
-import ../bincode_config
+import bincode
 
 proc main() {.raises: [BincodeError, IOError].} =
   let original = @[byte(1), 2, 3, 4, 5]
   echo "Original bytes: ", original
 
   var stream = memoryOutput()
-  serialize(stream, original)
+  encode(stream, original)
   let serialized = stream.getOutput()
   echo "Serialized length: ", serialized.len
   echo "Serialized bytes: ", serialized
 
-  let deserialized = deserialize(serialized)
+  let deserialized = decode(serialized, seq[byte])
   echo "Deserialized bytes: ", deserialized
   echo "Match: ", original == deserialized
 
@@ -25,12 +24,12 @@ proc main() {.raises: [BincodeError, IOError].} =
   echo "\nOriginal string: ", text
 
   var textStream = memoryOutput()
-  serializeString(textStream, text)
+  encode(textStream, text)
   let serializedText = textStream.getOutput()
   echo "Serialized length: ", serializedText.len
   echo "Serialized Text: ", serializedText
 
-  let deserializedText = deserializeString(serializedText)
+  let deserializedText = decode(serializedText, string)
   echo "Deserialized string: ", deserializedText
   echo "Match: ", text == deserializedText
 

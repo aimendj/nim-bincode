@@ -3,15 +3,14 @@
 
 {.push raises: [], gcsafe.}
 
-import faststreams  # Uses: memoryOutput, getOutput
+import faststreams # Uses: memoryOutput, getOutput
 import std/[times, strformat]
 import bincode
-import bincode_config
 
 # Helper function to serialize using streaming API and return seq[byte]
 proc serializeToSeq(data: openArray[byte], config: BincodeConfig = standard()): seq[byte] {.raises: [BincodeError, IOError].} =
   var stream = memoryOutput()
-  serialize(stream, data, config)
+  encode(stream, data, config)
   stream.getOutput()
 
 func variableConfig(limit: uint64 = 65536'u64): BincodeConfig =
@@ -30,7 +29,7 @@ proc benchmarkSerialize(data: seq[byte], config: BincodeConfig, iterations: int)
 proc benchmarkDeserialize(encoded: seq[byte], config: BincodeConfig, iterations: int): float {.raises: [BincodeError].} =
   let start = cpuTime()
   for _ in 0 ..< iterations:
-    discard deserialize(encoded, config)
+    discard decode(encoded, config)
   let elapsed = cpuTime() - start
   elapsed / iterations.float
 

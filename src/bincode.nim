@@ -3,60 +3,48 @@
 
 {.push raises: [], gcsafe.}
 
-import faststreams # Uses: memoryOutput, getOutput
-import bincode_common
-import bincode_config
-import bincode_helpers
-import bincode_fields
-import bincode_derive
-export bincode_common
-export bincode_config
-export bincode_helpers
-export bincode_derive
-export bincode_fields
+import faststreams
+import ./bincode/config
+import ./bincode/codecs
+import ./bincode/derive
+import ./bincode/serialization
+
+export config
+export codecs
+export derive
+export serialization
 
 ## Native Nim implementation of a subset of the bincode v2 format.
 ##
-## This module provides the main public API by re-exporting functionality from:
-## - `bincode_common`: Core byte serialization/deserialization, including
-##   `decodePrefixedByteSeq`_ for reading one length-prefixed blob inside a larger
-##   buffer (multi-field / struct layout).
-## - `bincode_helpers`: Strings, ``Vec<u8>``-wrapped integers, **plain** ``u32``
-##   fields (`serializeBincodeU32`_ / `deserializeBincodeU32`_), and related helpers.
-##
-## **Structs** and **enums**: use ``deriveBincode MyType`` (see `bincode_derive`_) to
-## generate ``serializeMyType`` / ``deserializeMyType``. You can also compose field
-## serializers by hand (``src/examples/struct_example.nim``). For ad-hoc payloads use
-## `serializeType`_ / `deserializeType`_ with a custom ``toBytes`` / ``fromBytes``
-## (two-argument form uses `standard()`_ for the outer ``Vec<u8>`` wrapper; overloads
-## with `BincodeConfig`_ pass that through to `serialize`_ / `deserialize`_).
-##
-## For `Vec[byte]` / strings the format matches Rust bincode v2 with:
-## - little- or big-endian configurable byte order
-## - fixed or variable-length integer encoding (see `bincode_config`)
-## - a configurable size limit (default 64 KiB)
+## This module provides the main public API:
+## - ``encode`` / ``decode`` / ``decodeAt``: Unified encoding/decoding for primitive types,
+##   sequences, strings, and types derived via ``deriveBincode`` / ``deriveBincodeCustom``.
+## - ``Bincode.encode`` / ``Bincode.decode``: Standard ``nim-serialization`` format interface.
+## - ``deriveBincode(MyType)``: Macro for generating Bincode procedures for structs & enums.
+## - ``deriveBincodeCustom(MyType, toBytes, fromBytes)``: Macro for custom encoded types.
+## - ``BincodeConfig``: Builders for endianness, integer encoding (fixed vs variable), and size limits.
 
-template serializeType*[T](value: T, toBytes: untyped): seq[byte] =
-  ## Serialize a custom type using ``toBytes(value)`` (proc, template, etc.).
+template encodeType*[T](value: T, toBytes: untyped): seq[byte] =
+  ## Encode a custom type using ``toBytes(value)`` (proc, template, etc.).
   var stream = memoryOutput()
-  serialize(stream, toBytes(value))
+  encode(stream, toBytes(value))
   stream.getOutput()
 
-template deserializeType*(data: openArray[byte], fromBytes: untyped): untyped =
-  ## Deserialize a custom type using ``fromBytes(deserialize(data))`` (proc, template, etc.).
-  fromBytes(deserialize(data))
+template decodeType*(data: openArray[byte], fromBytes: untyped): untyped =
+  ## Decode a custom type using ``fromBytes(decode(data))`` (proc, template, etc.).
+  fromBytes(decode(data))
 
-template serializeType*[T](value: T, config: BincodeConfig, toBytes: untyped): seq[byte] =
-  ## Same as `serializeType`_(``value``, ``toBytes``) but serializes the outer
+template encodeType*[T](value: T, config: BincodeConfig, toBytes: untyped): seq[byte] =
+  ## Same as `encodeType`(``value``, ``toBytes``) but encodes the outer
   ## length-prefixed blob using ``config`` (endianness, fixed vs variable lengths, limit).
   var stream = memoryOutput()
-  serialize(stream, toBytes(value), config)
+  encode(stream, toBytes(value), config)
   stream.getOutput()
 
-template deserializeType*(
+template decodeType*(
     data: openArray[byte], config: BincodeConfig, fromBytes: untyped
 ): untyped =
-  ## Same as `deserializeType`_(``data``, ``fromBytes``) but decodes the outer blob with ``config``.
-  fromBytes(deserialize(data, config))
+  ## Same as `decodeType`(``data``, ``fromBytes``) but decodes the outer blob with ``config``.
+  fromBytes(decode(data, config))
 
 {.pop.}
