@@ -6,6 +6,8 @@
 import faststreams # Uses: memoryOutput, getOutput
 import unittest2
 import std/strutils
+import std/sequtils
+import stew/endians2
 import bincode
 
 # ============================================================================
@@ -523,5 +525,193 @@ suite "Option and Array codecs":
     let strArr: array[2, string] = ["hello", "world"]
     let wireStr = encode(strArr)
     check decode(wireStr, array[2, string]) == strArr
+
+type BigItem = object
+  data: array[361, byte]
+
+deriveBincode(BigItem)
+
+type EmptyItem = object
+
+deriveBincode(EmptyItem)
+
+suite "Container length hardening":
+  let hugeCfg = standard().withLimit(high(uint64))
+  const
+    falseCount = toBytesLE(10_000_000'u64)
+    maxLenData = [0xFF'u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+    maxIntData = [0xFF'u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F]
+
+  test "false count for large items fails at the first absent item":
+    try:
+      discard decode(falseCount, seq[BigItem], hugeCfg)
+      check false
+    except BincodeError as exc:
+      check exc.msg == "Insufficient data for array"
+
+  test "length int.high for seq[BigItem] fails with no allocation from the count":
+    expect BincodeError:
+      discard decode(maxIntData, seq[BigItem], hugeCfg)
+
+  test "length above int.high gives BincodeError for seq[uint32]":
+    expect BincodeError:
+      discard decode(maxLenData, seq[uint32], hugeCfg)
+
+  test "length above int.high gives BincodeError for seq[byte]":
+    expect BincodeError:
+      discard decode(maxLenData, seq[byte], hugeCfg)
+
+  test "length above int.high gives BincodeError for string":
+    expect BincodeError:
+      discard decode(maxLenData, string, hugeCfg)
+
+  test "length above int.high gives BincodeError for top-level byte decode":
+    expect BincodeError:
+      discard decode(maxLenData, hugeCfg)
+
+  test "length int.high for seq[uint32] fails at the first absent item":
+    expect BincodeError:
+      discard decode(maxIntData, seq[uint32], hugeCfg)
+
+  test "length int.high for byte data gives BincodeError, not overflow":
+    expect BincodeError:
+      discard decode(maxIntData, seq[byte], hugeCfg)
+    expect BincodeError:
+      discard decodePrefixedByteSeq(maxIntData, hugeCfg)
+    expect BincodeError:
+      discard decode(maxIntData, hugeCfg)
+
+  test "size limit does not limit the item count of seq[uint32]":
+    let cfg = standard().withLimit(5'u64)
+    let value = @[1'u32, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    let wire = encode(value, cfg)
+    check decode(wire, seq[uint32], cfg) == value
+
+  test "size limit still limits seq[byte]":
+    let cfg = standard().withLimit(5'u64)
+    expect BincodeError:
+      discard encode(@[1'u8, 2, 3, 4, 5, 6, 7, 8], cfg)
+
+  test "items with zero wire size above the size limit round-trip":
+    let value = newSeq[EmptyItem](70_000)
+    let wire = encode(value)
+    check wire.len == 8
+    check decode(wire, seq[EmptyItem]).len == 70_000
+
+  test "decodeContainerLength checks the start offset":
+    const data = toBytesLE(5'u64)
+    check decodeContainerLength(data, standard()) == (5, 8)
+    try:
+      discard decodeContainerLength(data, standard(), data.len)
+      check false
+    except BincodeError as exc:
+      check exc.msg == "Insufficient data for length prefix"
+    for start in [data.len + 1, -1]:
+      try:
+        discard decodeContainerLength(data, standard(), start)
+        check false
+      except BincodeError as exc:
+        check exc.msg == "Invalid start offset"
+
+  test "decodeBoundedSeqAt accepts a count equal to maxLen":
+    let wire = encode(@[1'u32, 2, 3])
+    let (items, used) = decodeBoundedSeqAt(wire, uint32, 3)
+    check items == @[1'u32, 2, 3]
+    check used == wire.len
+
+  test "decodeBoundedSeqAt rejects a count above maxLen":
+    let wire = encode(@[1'u32, 2, 3, 4])
+    expect BincodeError:
+      discard decodeBoundedSeqAt(wire, uint32, 3)
+
+  test "decodeBoundedSeqAt rejects a false count":
+    expect BincodeError:
+      discard decodeBoundedSeqAt(falseCount, BigItem, 1000, hugeCfg)
+
+  test "decodeBoundedSeqAt applies maxLen to byte items":
+    let wire3 = encode(@[1'u8, 2, 3])
+    let (bytes, used) = decodeBoundedSeqAt(wire3, byte, 3)
+    check bytes == @[1'u8, 2, 3]
+    check used == wire3.len
+    let wire4 = encode(@[1'u8, 2, 3, 4])
+    expect BincodeError:
+      discard decodeBoundedSeqAt(wire4, byte, 3)
+
+  test "decodeBoundedSeqAt checks maxLen before the byte limit":
+    let wire = encode(@[1'u8, 2, 3, 4, 5, 6])
+    let cfg = standard().withLimit(2'u64)
+    try:
+      discard decodeBoundedSeqAt(wire, byte, 3, cfg)
+      check false
+    except BincodeError as exc:
+      check exc.msg == "Sequence length exceeds maximum"
+    try:
+      discard decodeBoundedSeqAt(wire, byte, 10, cfg)
+      check false
+    except BincodeError as exc:
+      check exc.msg == "Data exceeds size limit"
+
+  test "decodeBoundedSeqAt with maxLen 0 accepts only an empty sequence":
+    let empty: seq[uint32] = @[]
+    let wire0 = encode(empty)
+    let (items, used) = decodeBoundedSeqAt(wire0, uint32, 0)
+    check items.len == 0
+    check used == wire0.len
+    let wire1 = encode(@[7'u32])
+    expect BincodeError:
+      discard decodeBoundedSeqAt(wire1, uint32, 0)
+
+  test "decodeBoundedSeqAt with a negative maxLen gives BincodeError":
+    let empty: seq[uint32] = @[]
+    let wire = encode(empty)
+    let maxLen = -1
+    try:
+      discard decodeBoundedSeqAt(wire, uint32, maxLen)
+      check false
+    except BincodeError as exc:
+      check exc.msg == "Sequence length exceeds maximum"
+
+  test "decodeBoundedSeqAt reads from a start offset":
+    let seqWire = encode(@[5'u32, 6])
+    let data = @[0xAA'u8, 0xBB, 0xCC] & seqWire
+    let (items, used) = decodeBoundedSeqAt(data, uint32, 2, standard(), 3)
+    check items == @[5'u32, 6]
+    check used == seqWire.len
+
+  test "variable int encoding: seq[uint32] round-trips and rejects a false count":
+    let cfg = standard().withVariableIntEncoding()
+    let value = @[1'u32, 300, 70000]
+    check decode(encode(value, cfg), seq[uint32], cfg) == value
+    let data = encodeLength(10_000_000'u64, cfg)
+    expect BincodeError:
+      discard decode(data, seq[uint32], cfg)
+
+  test "big endian: seq[uint32] round-trips and rejects a false count":
+    let cfg = standard().withBigEndian()
+    let value = @[1'u32, 300, 70000]
+    check decode(encode(value, cfg), seq[uint32], cfg) == value
+    let data = toBytesBE(10_000_000'u64)
+    expect BincodeError:
+      discard decode(data, seq[uint32], cfg)
+
+  test "nested seq round-trips and rejects a false inner count":
+    let value = @[@[1'u32, 2], @[], @[3'u32]]
+    check decode(encode(value), seq[seq[uint32]]) == value
+    let data = @(toBytesLE(1'u64)) & @falseCount
+    expect BincodeError:
+      discard decode(data, seq[seq[uint32]])
+
+  test "cappedPrealloc caps the reservation at MaxPreallocBytes":
+    check cappedPrealloc(10_000_000, 361) == 2904
+    check cappedPrealloc(1000, 0) == 1000
+    check cappedPrealloc(2_000_000, 0) == 1_048_576
+    check cappedPrealloc(5, 2_000_000) == 0
+
+  test "seq[uint32] at the reservation cap and above it round-trips":
+    let capCount = MaxPreallocBytes div sizeof(uint32)
+    check capCount == 262_144
+    for n in [capCount, capCount + 1]:
+      let value = (0 ..< n).mapIt(uint32(it))
+      check decode(encode(value, hugeCfg), seq[uint32], hugeCfg) == value
 
 {.pop.}

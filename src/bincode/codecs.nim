@@ -207,6 +207,25 @@ func decodeLength*(
         raise newException(BincodeError, "Failed to decode variable-length integer")
       return (decoded.val, decoded.len.int)
 
+const MaxPreallocBytes* = 1024 * 1024
+  ## Maximum number of bytes that a container decoder reserves before it reads elements
+
+func decodeContainerLength*(
+    data: openArray[byte], config: BincodeConfig, start: int = 0
+): (int, int) {.raises: [BincodeError].} =
+  ## Decode a container length prefix at ``start``. Return the count and prefix size.
+  if start < 0 or start > data.len:
+    raise newException(BincodeError, "Invalid start offset")
+  let (lenVal, prefixSize) = decodeLength(data.toOpenArray(start, data.high), config)
+  if lenVal > int.high.uint64:
+    raise newException(BincodeError, "Length value exceeds maximum int size")
+  (lenVal.int, prefixSize)
+
+func cappedPrealloc*(count: int, elemSize: int): int =
+  ## Return the initial capacity for ``count`` elements of ``elemSize`` bytes.
+  ## The capacity uses at most ``MaxPreallocBytes``.
+  min(count, MaxPreallocBytes div max(elemSize, 1))
+
 # Varint codecs
 
 proc encodeBincodeVarintU64*(
@@ -317,7 +336,7 @@ func decodePrefixedByteSeq*(
     raise newException(BincodeError, "Length value exceeds maximum int size")
 
   let length = lengthValue.int
-  checkMinimumSize(relLen, prefixSize + length)
+  checkMinimumSize(relLen - prefixSize, length)
 
   var output = newSeq[byte](length)
   if length > 0:
@@ -620,7 +639,6 @@ proc encode*[T](
   when T is byte:
     encodePrefixedByteSeq(stream, value, config)
   else:
-    checkSizeLimit(value.len.uint64, config.sizeLimit)
     encodeLength(stream, value.len.uint64, config)
     for item in value:
       encode(stream, item, config)
@@ -632,6 +650,22 @@ proc encode*(
 ) {.raises: [BincodeError, IOError].} =
   encodePrefixedByteSeq(stream, data, config)
 
+func decodeSeqItems[T](
+    data: openArray[byte],
+    tParam: typedesc[T],
+    count: int,
+    prefixSize: int,
+    config: BincodeConfig,
+    start: int,
+): (seq[T], int) {.raises: [BincodeError].} =
+  var cur = start + prefixSize
+  var res = newSeqOfCap[T](cappedPrealloc(count, sizeof(T)))
+  for _ in 0 ..< count:
+    let (item, used) = decodeAt(data, typedesc[T], config, cur)
+    res.add item
+    cur += used
+  (res, cur - start)
+
 func decodeAt*[T](
     data: openArray[byte],
     tParam: typedesc[seq[T]],
@@ -641,17 +675,26 @@ func decodeAt*[T](
   when T is byte:
     decodePrefixedByteSeq(data, config, start)
   else:
-    if start < 0 or start > data.len:
-      raise newException(BincodeError, "Invalid start offset")
-    let (lenVal, prefixSize) = decodeLength(data.toOpenArray(start, data.high), config)
-    checkSizeLimit(lenVal, config.sizeLimit)
-    var cur = start + prefixSize
-    var res = newSeq[T](lenVal.int)
-    for i in 0 ..< lenVal.int:
-      let (item, used) = decodeAt(data, typedesc[T], config, cur)
-      res[i] = item
-      cur += used
-    (res, cur - start)
+    let (count, prefixSize) = decodeContainerLength(data, config, start)
+    decodeSeqItems(data, typedesc[T], count, prefixSize, config, start)
+
+func decodeBoundedSeqAt*[T](
+    data: openArray[byte],
+    tParam: typedesc[T],
+    maxLen: int,
+    config: BincodeConfig = standard(),
+    start: int = 0,
+): (seq[T], int) {.raises: [BincodeError].} =
+  ## Decode a ``seq[T]`` at ``start``. Reject a count above ``maxLen`` before
+  ## any allocation. ``T`` is the element type.
+  let (count, prefixSize) = decodeContainerLength(data, config, start)
+  if count > maxLen:
+    raise newException(BincodeError, "Sequence length exceeds maximum")
+  when T is byte:
+    # This decodes the prefix again. It keeps the byte limit check of the byte path.
+    decodePrefixedByteSeq(data, config, start)
+  else:
+    decodeSeqItems(data, typedesc[T], count, prefixSize, config, start)
 
 # Generic distinct types
 
@@ -752,14 +795,8 @@ proc decode*[T](
 func decode*(
     data: openArray[byte], config: BincodeConfig = standard()
 ): seq[byte] {.raises: [BincodeError].} =
-  let (length, prefixSize) = decodeLength(data, config)
-  checkSizeLimit(length, config.sizeLimit)
-  checkMinimumSize(data.len, prefixSize + length.int)
-  checkNoTrailingBytes(data.len, prefixSize, length.int)
-  if length == 0:
-    return @[]
-  var output = newSeq[byte](length)
-  copyMem(output[0].addr, data[prefixSize].unsafeAddr, length.int)
+  let (output, used) = decodePrefixedByteSeq(data, config, 0)
+  checkNoTrailingBytes(data.len, 0, used)
   output
 
 proc decode*[T](

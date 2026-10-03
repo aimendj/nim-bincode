@@ -6,6 +6,7 @@
 import unittest2
 import faststreams
 import std/options
+import std/sequtils
 import bincode
 
 type CustomId = distinct uint64
@@ -477,5 +478,77 @@ suite "Complex Multi-Variant and Nested Protocol Messages":
     check back.hashes.len == 2
     check back.hashes[0][0] == 0x01
     check back.hashes[1][0] == 0x02
+
+type BoundedItem = object
+  id: uint32
+
+deriveBincode(BoundedItem)
+
+const MaxBoundedItems = 2
+
+type BoundedItems = distinct seq[BoundedItem]
+
+func decodeAt(
+    data: openArray[byte],
+    tParam: typedesc[BoundedItems],
+    config: BincodeConfig = standard(),
+    start: int = 0,
+): (BoundedItems, int) {.raises: [BincodeError].} =
+  let (items, used) =
+    decodeBoundedSeqAt(data, BoundedItem, MaxBoundedItems, config, start)
+  (BoundedItems(items), used)
+
+type BoundedHolder = object
+  items: BoundedItems
+
+deriveBincode(BoundedHolder)
+
+type OptBoundedHolder = object
+  items: Option[BoundedItems]
+
+deriveBincode(OptBoundedHolder)
+
+type NestedBoundedHolder = object
+  groups: seq[BoundedItems]
+
+deriveBincode(NestedBoundedHolder)
+
+func boundedItems(n: int): BoundedItems =
+  BoundedItems((0 ..< n).mapIt(BoundedItem(id: uint32(it))))
+
+suite "Bounded sequence field overload":
+  test "distinct field with MaxBoundedItems items round-trips":
+    let holder = BoundedHolder(items: boundedItems(2))
+    let back = decode(encode(holder), BoundedHolder)
+    check seq[BoundedItem](back.items) == seq[BoundedItem](holder.items)
+
+  test "distinct field with too many items gives BincodeError":
+    let wire = encode(BoundedHolder(items: boundedItems(3)))
+    expect BincodeError:
+      discard decode(wire, BoundedHolder)
+
+  test "distinct field with too many items gives SerializationError via Bincode":
+    let wire = Bincode.encode(BoundedHolder(items: boundedItems(3)))
+    expect SerializationError:
+      discard Bincode.decode(wire, BoundedHolder)
+
+  test "Option of the distinct field applies the bound":
+    let holder = OptBoundedHolder(items: some(boundedItems(2)))
+    let back = decode(encode(holder), OptBoundedHolder)
+    check back.items.isSome
+    check seq[BoundedItem](back.items.get()) == seq[BoundedItem](holder.items.get())
+    let wire = encode(OptBoundedHolder(items: some(boundedItems(3))))
+    expect BincodeError:
+      discard decode(wire, OptBoundedHolder)
+
+  test "seq of the distinct field applies the bound to each inner sequence":
+    let holder = NestedBoundedHolder(groups: @[boundedItems(2), boundedItems(1)])
+    let back = decode(encode(holder), NestedBoundedHolder)
+    check back.groups.len == 2
+    check seq[BoundedItem](back.groups[0]) == seq[BoundedItem](holder.groups[0])
+    check seq[BoundedItem](back.groups[1]) == seq[BoundedItem](holder.groups[1])
+    let wire = encode(NestedBoundedHolder(groups: @[boundedItems(2), boundedItems(3)]))
+    expect BincodeError:
+      discard decode(wire, NestedBoundedHolder)
 
 {.pop.}
