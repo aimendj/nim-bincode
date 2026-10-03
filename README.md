@@ -337,6 +337,35 @@ nph --diff src/bincode.nim
 **Config** (`bincode_config.nim`):
 
 - `standard()`, `withLittleEndian()`, `withBigEndian()`, `withFixedIntEncoding()`, `withVariableIntEncoding()`, `withLimit()`, etc.
+- `sizeLimit` is a limit in bytes. It applies to byte sequences and strings. It does not limit the number of elements in a `seq[T]`, `Table` or `HashSet`.
+
+**Container lengths** (`codecs.nim`):
+
+- `decodeBoundedSeqAt(data, T, maxLen, config, start)` — decode a `seq[T]` that can have `maxLen` elements at most. `T` is the element type. It returns the sequence and the number of bytes that it read.
+- `decodeContainerLength(data, config, start)` — read a length prefix and return it as an `int`.
+- `cappedPrealloc(count, elemSize)` — the capacity that a decoder reserves for `count` elements.
+- `MaxPreallocBytes` — the maximum for that capacity: 1 MiB.
+
+The length prefix of a container comes from the sender, so the decoders do not trust it. They do not allocate memory for the full length at the start. A `seq[T]` decoder reserves `MaxPreallocBytes` at most, and then the sequence grows as the decoder reads each element. A `Table` or a `HashSet` has more overhead for each entry, so its first reservation can be approximately 4 MiB. If the length is larger than the input, the decode fails when the input ends.
+
+When a field has a known maximum length, use `decodeBoundedSeqAt`. It rejects a longer length before it allocates or decodes anything. Declare a distinct type for the field, and put the `decodeAt` overload immediately after the type:
+
+```nim
+type Items = distinct seq[Item]
+
+func decodeAt*(
+    data: openArray[byte],
+    tParam: typedesc[Items],
+    config: BincodeConfig = standard(),
+    start: int = 0,
+): (Items, int) {.raises: [BincodeError].} =
+  let (items, used) = decodeBoundedSeqAt(data, Item, MaxItems, config, start)
+  (Items(items), used)
+```
+
+Put the overload before any other code that uses the type. If the generic decoder is used for the type first, the maximum does not apply.
+
+One case has no protection. An element type that encodes to zero bytes, for example an empty object, takes no input. The input thus cannot limit the number of these elements. If you decode such a type from an untrusted source, use `decodeBoundedSeqAt`.
 
 ## Notes
 

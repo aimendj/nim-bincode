@@ -1,5 +1,6 @@
 import unittest2
 import std/[tables, sets]
+import stew/endians2
 import bincode
 import faststreams
 import serialization
@@ -29,6 +30,11 @@ type
   BlockNumber* = distinct uint64
   PeerId* = distinct array[4, byte]
   MyList*[T] = distinct seq[T]
+
+const
+  falseCount = toBytesLE(10_000_000'u64)
+  maxLenData = [0xFF'u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+  maxIntData = [0xFF'u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F]
 
 suite "nim-serialization Bincode format":
   test "Bincode.encode and Bincode.decode roundtrip":
@@ -223,3 +229,27 @@ suite "nim-serialization Bincode format":
     let back = genericNetworkDecode[ErrorMsg](wire)
     check back.code == 404
     check back.message == "Not Found"
+
+  test "Table with a false count gives SerializationError":
+    expect SerializationError:
+      discard Bincode.decode(falseCount, Table[uint64, uint64])
+
+  test "HashSet with a false count gives SerializationError":
+    expect SerializationError:
+      discard Bincode.decode(falseCount, HashSet[uint64])
+
+  test "Table with length int.high fails with no allocation from the count":
+    expect SerializationError:
+      discard Bincode.decode(maxIntData, Table[uint64, uint64])
+
+  test "HashSet with length int.high fails with no allocation from the count":
+    expect SerializationError:
+      discard Bincode.decode(maxIntData, HashSet[uint64])
+
+  test "Table with a length above int.high gives SerializationError":
+    expect SerializationError:
+      discard Bincode.decode(maxLenData, Table[uint64, uint64])
+
+  test "HashSet with a length above int.high gives SerializationError":
+    expect SerializationError:
+      discard Bincode.decode(maxLenData, HashSet[uint64])

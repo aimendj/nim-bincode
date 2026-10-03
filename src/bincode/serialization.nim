@@ -76,11 +76,10 @@ proc readValue*[K, V](
   if r.offset >= r.buffer.len:
     raise (ref SerializationError)(msg: "Unexpected end of stream")
   try:
-    let (lenVal, nLen) =
-      decodeLength(r.buffer.toOpenArray(r.offset, r.buffer.high), r.config)
+    let (count, nLen) = decodeContainerLength(r.buffer, r.config, r.offset)
     r.offset += nLen
-    t = initTable[K, V](lenVal.int)
-    for _ in 0 ..< lenVal.int:
+    t = initTable[K, V](cappedPrealloc(count, sizeof((K, V))))
+    for _ in 0 ..< count:
       var k: K
       var v: V
       r.readValue(k)
@@ -104,11 +103,10 @@ proc readValue*[T](
   if r.offset >= r.buffer.len:
     raise (ref SerializationError)(msg: "Unexpected end of stream")
   try:
-    let (lenVal, nLen) =
-      decodeLength(r.buffer.toOpenArray(r.offset, r.buffer.high), r.config)
+    let (count, nLen) = decodeContainerLength(r.buffer, r.config, r.offset)
     r.offset += nLen
-    s = initHashSet[T](lenVal.int)
-    for _ in 0 ..< lenVal.int:
+    s = initHashSet[T](cappedPrealloc(count, sizeof(T)))
+    for _ in 0 ..< count:
       var item: T
       r.readValue(item)
       s.incl(item)
