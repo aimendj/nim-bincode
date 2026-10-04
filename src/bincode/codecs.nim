@@ -4,7 +4,7 @@
 {.push raises: [], gcsafe.}
 
 import faststreams
-import std/[typetraits, options]
+import std/[macros, typetraits, options]
 import stew/[endians2, leb128]
 import ./config
 
@@ -696,7 +696,46 @@ func decodeBoundedSeqAt*[T](
   else:
     decodeSeqItems(data, typedesc[T], count, prefixSize, config, start)
 
+# Bounded sequences
+
+type BoundedSeq*[T; maxLen: static int] = distinct seq[T]
+  ## A ``seq[T]`` that the decoder accepts with ``maxLen`` elements at most.
+
+template asSeq*(x: BoundedSeq): auto =
+  distinctBase(x)
+
+template len*(x: BoundedSeq): auto =
+  len(distinctBase(x))
+
+template `[]`*(x: BoundedSeq, idx: auto): untyped =
+  distinctBase(x)[idx]
+
+template `==`*(a, b: BoundedSeq): bool =
+  distinctBase(a) == distinctBase(b)
+
+template items*(x: BoundedSeq): untyped =
+  items(distinctBase(x))
+
+template pairs*(x: BoundedSeq): untyped =
+  pairs(distinctBase(x))
+
+template `$`*(x: BoundedSeq): auto =
+  $(distinctBase(x))
+
 # Generic distinct types
+
+macro wrapsBoundedSeq(T: typedesc): bool =
+  # True when a distinct layer under `T` is a `BoundedSeq`.
+  var
+    res = newLit(false)
+    layer = getTypeInst(T)[1]
+  while true:
+    let impl = getTypeImpl(layer)
+    if impl.kind != nnkDistinctTy:
+      break
+    layer = impl[0]
+    res = infix(res, "or", infix(layer, "is", bindSym("BoundedSeq")))
+  res
 
 proc encode*[T: distinct](
     stream: OutputStreamHandle, value: T, config: BincodeConfig = standard()
@@ -709,7 +748,16 @@ proc decodeAt*[T: distinct](
     config: BincodeConfig = standard(),
     start: int = 0,
 ): (T, int) {.raises: [BincodeError].} =
-  let (v, n) = decodeAt(data, typedesc[distinctBase(T)], config, start)
+  when T is BoundedSeq:
+    # `T.T` is the element type of the bounded sequence.
+    let (v, n) = decodeBoundedSeqAt(data, typedesc[T.T], T.maxLen, config, start)
+  else:
+    when wrapsBoundedSeq(T):
+      {.
+        error:
+          "a distinct type on a BoundedSeq loses the bound; use a type alias, or add a decodeAt overload for the type"
+      .}
+    let (v, n) = decodeAt(data, typedesc[distinctBase(T)], config, start)
   (T(v), n)
 
 # Global Top-Level encode and decode procedures
