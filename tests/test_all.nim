@@ -3,8 +3,6 @@
 
 {.used.}
 
-import unittest2
-
 # Import all test suites
 import ./test_config
 import ./test_codecs
