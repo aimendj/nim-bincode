@@ -1,3 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+# Copyright (c) Status Research & Development GmbH
+
+{.push raises: [], gcsafe.}
+{.used.}
+
 import unittest2
 import std/[tables, sets]
 import stew/endians2
@@ -221,7 +227,9 @@ suite "nim-serialization Bincode format":
     check back.owner == "Alice"
 
   test "Bincode decode with generic type parameter (MsgType)":
-    proc genericNetworkDecode[MsgType](data: seq[byte]): MsgType =
+    proc genericNetworkDecode[MsgType](
+        data: seq[byte]
+    ): MsgType {.raises: [SerializationError].} =
       decode(Bincode, data, MsgType)
 
     let origMsg = ErrorMsg(code: 404, message: "Not Found")
@@ -261,3 +269,5 @@ suite "nim-serialization Bincode format":
       check false
     except SerializationError as exc:
       check exc.msg == "Sequence length exceeds maximum"
+
+{.pop.}

@@ -2,6 +2,7 @@
 # Copyright (c) Status Research & Development GmbH
 
 {.push raises: [], gcsafe.}
+{.used.}
 
 import unittest2
 import faststreams
