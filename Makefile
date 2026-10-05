@@ -63,6 +63,7 @@ format:
 	@echo "Formatting Nim files..."
 	nph src/bincode.nim
 	nph src/bincode/config.nim
+	nph src/bincode/types.nim
 	nph src/bincode/codecs.nim
 	nph src/bincode/derive.nim
 	nph src/bincode/serialization.nim
@@ -72,6 +73,7 @@ format:
 	nph tests/test_all.nim
 	nph tests/test_config.nim
 	nph tests/test_codecs.nim
+	nph tests/test_types.nim
 	nph tests/test_derive.nim
 	nph tests/test_serialization.nim
 	nph tests/test_cross_runner.nim
@@ -83,6 +85,7 @@ format-check:
 	@echo "Checking formatting of Nim files..."
 	@nph --check src/bincode.nim && \
 	 nph --check src/bincode/config.nim && \
+	 nph --check src/bincode/types.nim && \
 	 nph --check src/bincode/codecs.nim && \
 	 nph --check src/bincode/derive.nim && \
 	 nph --check src/bincode/serialization.nim && \
@@ -92,6 +95,7 @@ format-check:
 	 nph --check tests/test_all.nim && \
 	 nph --check tests/test_config.nim && \
 	 nph --check tests/test_codecs.nim && \
+	 nph --check tests/test_types.nim && \
 	 nph --check tests/test_derive.nim && \
 	 nph --check tests/test_serialization.nim && \
 	 nph --check tests/test_cross_runner.nim && \

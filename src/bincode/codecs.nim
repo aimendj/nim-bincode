@@ -7,6 +7,9 @@ import faststreams
 import std/[macros, typetraits, options]
 import stew/[endians2, leb128]
 import ./config
+import ./types
+
+export types
 
 type BincodeError* = object of CatchableError
   ## Exception raised when bincode operations fail
@@ -695,32 +698,6 @@ func decodeBoundedSeqAt*[T](
     decodePrefixedByteSeq(data, config, start)
   else:
     decodeSeqItems(data, typedesc[T], count, prefixSize, config, start)
-
-# Bounded sequences
-
-type BoundedSeq*[T; maxLen: static int] = distinct seq[T]
-  ## A ``seq[T]`` that the decoder accepts with ``maxLen`` elements at most.
-
-template asSeq*(x: BoundedSeq): auto =
-  distinctBase(x)
-
-template len*(x: BoundedSeq): auto =
-  len(distinctBase(x))
-
-template `[]`*(x: BoundedSeq, idx: auto): untyped =
-  distinctBase(x)[idx]
-
-template `==`*(a, b: BoundedSeq): bool =
-  distinctBase(a) == distinctBase(b)
-
-template items*(x: BoundedSeq): untyped =
-  items(distinctBase(x))
-
-template pairs*(x: BoundedSeq): untyped =
-  pairs(distinctBase(x))
-
-template `$`*(x: BoundedSeq): auto =
-  $(distinctBase(x))
 
 # Generic distinct types
 

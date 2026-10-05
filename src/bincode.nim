@@ -5,11 +5,13 @@
 
 import faststreams
 import ./bincode/config
+import ./bincode/types
 import ./bincode/codecs
 import ./bincode/derive
 import ./bincode/serialization
 
 export config
+export types
 export codecs
 export derive
 export serialization
