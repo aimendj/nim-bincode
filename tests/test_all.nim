@@ -6,5 +6,6 @@
 # Import all test suites
 import ./test_config
 import ./test_codecs
+import ./test_types
 import ./test_derive
 import ./test_serialization

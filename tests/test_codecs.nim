@@ -797,17 +797,4 @@ suite "BoundedSeq":
     check not compiles(decode(wire, DistinctTwice))
     check not compiles(decode(wire, GenericBounded[uint32]))
 
-  test "the helpers read a bounded sequence":
-    var list = BoundedSeq[uint32, 4](@[5'u32, 6, 7])
-    check list.len == 3
-    check list[^1] == 7'u32
-    check list == BoundedSeq[uint32, 4](@[5'u32, 6, 7])
-    check list != BoundedSeq[uint32, 4](@[5'u32, 6, 8])
-    check list.mapIt(it) == @[5'u32, 6, 7]
-    check $list == "@[5, 6, 7]"
-    for i, item in list:
-      check item == uint32(5 + i)
-    list.asSeq.add 8'u32
-    check list.asSeq == @[5'u32, 6, 7, 8]
-
 {.pop.}

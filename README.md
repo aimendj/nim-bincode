@@ -339,9 +339,13 @@ nph --diff src/bincode.nim
 - `standard()`, `withLittleEndian()`, `withBigEndian()`, `withFixedIntEncoding()`, `withVariableIntEncoding()`, `withLimit()`, etc.
 - `sizeLimit` is a limit in bytes. It applies to byte sequences and strings. It does not limit the number of elements in a `seq[T]`, `Table` or `HashSet`.
 
-**Container lengths** (`codecs.nim`):
+**Bounded sequence type** (`types.nim`):
 
 - `BoundedSeq[T, maxLen]` — a `seq[T]` that the decoder accepts with `maxLen` elements at most. A longer length fails before the decoder allocates or reads an element. The wire format is the same as for `seq[T]`.
+- A module that needs only the type and its helpers can import `bincode/types`, which has no codec.
+
+**Container lengths** (`codecs.nim`):
+
 - `decodeBoundedSeqAt(data, T, maxLen, config, start)` — decode a `seq[T]` that can have `maxLen` elements at most. `T` is the element type. It returns the sequence and the number of bytes that it read.
 - `decodeContainerLength(data, config, start)` — read a length prefix and return it as an `int`.
 - `cappedPrealloc(count, elemSize)` — the capacity that a decoder reserves for `count` elements.
@@ -358,7 +362,7 @@ type Batch = object
 deriveBincode(Batch)
 ```
 
-Make a value with the type conversion: `BoundedSeq[Item, MaxItems](@[a, b])`. Read it with `len`, `[]`, `==`, `$`, `items`, `pairs` and `asSeq`. A module that uses the field must have these helpers in scope: import `bincode`, or export them from the module that declares the type.
+Make a value with the type conversion: `BoundedSeq[Item, MaxItems](@[a, b])`. Read it with `len`, `[]`, `==`, `$`, `items`, `pairs` and `asSeq`. A module that uses the field must have these helpers in scope: import `bincode` or `bincode/types`, or export `bincode/types` from the module that declares the type.
 
 The encoder does not check the bound. Code that builds a `BoundedSeq` must keep the length in the bound. `asSeq` on a variable gives the base sequence, which has no bound.
 
