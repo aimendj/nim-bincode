@@ -714,4 +714,99 @@ suite "Container length hardening":
       let value = (0 ..< n).mapIt(uint32(it))
       check decode(encode(value, hugeCfg), seq[uint32], hugeCfg) == value
 
+type
+  Holder = object
+    small: BoundedSeq[uint32, 2]
+    large: BoundedSeq[uint32, 3]
+    bytes: BoundedSeq[byte, 4]
+
+  PlainHolder = object
+    small: seq[uint32]
+    large: seq[uint32]
+    bytes: seq[byte]
+
+  AliasBounded = BoundedSeq[uint32, 2]
+  DistinctBounded = distinct BoundedSeq[uint32, 2]
+  DistinctAlias = distinct AliasBounded
+  DistinctTwice = distinct DistinctBounded
+  GenericBounded[T] = distinct BoundedSeq[T, 2]
+  NestedBounded = BoundedSeq[BoundedSeq[byte, 2], 3]
+
+deriveBincode(Holder)
+deriveBincode(PlainHolder)
+
+func plainHolder(small, large, bytes: int): PlainHolder =
+  PlainHolder(
+    small: newSeq[uint32](small),
+    large: newSeq[uint32](large),
+    bytes: newSeq[byte](bytes),
+  )
+
+template expectBoundError(body: untyped) =
+  try:
+    body
+    check false
+  except BincodeError as exc:
+    check exc.msg == "Sequence length exceeds maximum"
+
+suite "BoundedSeq":
+  test "fields at their bounds round-trip in the seq wire format":
+    let
+      holder = Holder(
+        small: BoundedSeq[uint32, 2](@[1'u32, 2]),
+        large: BoundedSeq[uint32, 3](@[3'u32, 4, 5]),
+        bytes: BoundedSeq[byte, 4](@[6'u8, 7, 8, 9]),
+      )
+      wire = encode(
+        PlainHolder(small: @[1'u32, 2], large: @[3'u32, 4, 5], bytes: @[6'u8, 7, 8, 9])
+      )
+    check encode(holder) == wire
+    check decode(wire, Holder) == holder
+
+  test "a field above its bound is rejected":
+    expectBoundError:
+      discard decode(encode(plainHolder(3, 3, 4)), Holder)
+    expectBoundError:
+      discard decode(encode(plainHolder(2, 4, 4)), Holder)
+    expectBoundError:
+      discard decode(encode(plainHolder(2, 3, 5)), Holder)
+
+  test "a false count is rejected before the decoder reads an element":
+    expectBoundError:
+      discard decode(toBytesLE(10_000_000'u64), Holder)
+
+  test "variable int encoding applies the bound":
+    let cfg = standard().withVariableIntEncoding()
+    check decode(encode(@[1'u32, 300], cfg), AliasBounded, cfg).asSeq == @[1'u32, 300]
+    expectBoundError:
+      discard decode(encode(@[1'u32, 2, 3], cfg), AliasBounded, cfg)
+
+  test "nested bounded sequences apply both bounds":
+    let plain = @[@[1'u8, 2], @[3'u8], newSeq[byte]()]
+    check decode(encode(plain), NestedBounded).mapIt(it.asSeq) == plain
+    expectBoundError:
+      discard decode(encode(@[@[1'u8, 2, 3]]), NestedBounded)
+    expectBoundError:
+      discard decode(encode(@[@[1'u8], @[2'u8], @[3'u8], @[4'u8]]), NestedBounded)
+
+  test "a distinct type on a BoundedSeq does not compile":
+    let wire = encode(@[1'u32, 2])
+    check not compiles(decode(wire, DistinctBounded))
+    check not compiles(decode(wire, DistinctAlias))
+    check not compiles(decode(wire, DistinctTwice))
+    check not compiles(decode(wire, GenericBounded[uint32]))
+
+  test "the helpers read a bounded sequence":
+    var list = BoundedSeq[uint32, 4](@[5'u32, 6, 7])
+    check list.len == 3
+    check list[^1] == 7'u32
+    check list == BoundedSeq[uint32, 4](@[5'u32, 6, 7])
+    check list != BoundedSeq[uint32, 4](@[5'u32, 6, 8])
+    check list.mapIt(it) == @[5'u32, 6, 7]
+    check $list == "@[5, 6, 7]"
+    for i, item in list:
+      check item == uint32(5 + i)
+    list.asSeq.add 8'u32
+    check list.asSeq == @[5'u32, 6, 7, 8]
+
 {.pop.}

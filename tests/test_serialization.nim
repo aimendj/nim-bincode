@@ -253,3 +253,11 @@ suite "nim-serialization Bincode format":
   test "HashSet with a length above int.high gives SerializationError":
     expect SerializationError:
       discard Bincode.decode(maxLenData, HashSet[uint64])
+
+  test "Bincode.decode rejects a bounded Table value above its bound":
+    let wire = Bincode.encode({1'u8: @[1'u32, 2], 2'u8: @[1'u32, 2, 3]}.toTable)
+    try:
+      discard Bincode.decode(wire, Table[uint8, BoundedSeq[uint32, 2]])
+      check false
+    except SerializationError as exc:
+      check exc.msg == "Sequence length exceeds maximum"
