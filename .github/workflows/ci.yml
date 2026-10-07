@@ -29,8 +29,8 @@ jobs:
           nim-version: 'stable'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install nph
-        run: nimble install -y nph
+      - name: Install nph (pinned to latest master)
+        run: nimble install -y https://github.com/arnetheduck/nph.git@#773fa32
 
       - name: Verify formatting
         run: make format-check
