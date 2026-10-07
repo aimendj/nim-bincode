@@ -10,10 +10,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   # 1. Fast formatting & style check
   format-check:
-    name: Format Check (nph)
+    name: 1. Format Check (nph)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -31,20 +35,34 @@ jobs:
       - name: Verify formatting
         run: make format-check
 
-  # 2. Multi-OS & Multi-Version Nim Unit Tests
+  # 2. Compile library with default make
+  build:
+    name: 2. Build Library (make)
+    needs: [format-check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Nim
+        uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: 'stable'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build library
+        run: make
+
+  # 3. Multi-OS & Multi-Version Nim Unit Tests
   test-nim:
-    name: Test Nim (${{ matrix.os }}, Nim ${{ matrix.nim-version }})
+    name: 3. Test Nim (${{ matrix.os }}, Nim ${{ matrix.nim-version }})
+    needs: [build]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         nim-version: ['2.2.4', 'stable']
-        include:
-          - os: ubuntu-latest
-            nim-version: 'devel'
-            allow_failure: true
-    continue-on-error: ${{ matrix.allow_failure || false }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -58,13 +76,14 @@ jobs:
       - name: Run Nim Unit Tests
         run: make test-nim
 
-  # 3. Bidirectional Rust ↔ Nim Cross-Verification
+  # 4. Bidirectional Rust ↔ Nim Cross-Verification
   test-cross:
-    name: Cross-Verification (${{ matrix.os }})
+    name: 4. Cross-Verification (${{ matrix.os }})
+    needs: [build]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
