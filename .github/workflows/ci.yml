@@ -15,9 +15,9 @@ defaults:
     shell: bash
 
 jobs:
-  # 1. Fast formatting & style check
+  # Fast formatting & style check
   format-check:
-    name: 1. Format Check (nph)
+    name: Format Check (nph)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -35,10 +35,9 @@ jobs:
       - name: Verify formatting
         run: make format-check
 
-  # 2. Compile library with default make
+  # Compile library with default make
   build:
-    name: 2. Build Library (make)
-    needs: [format-check]
+    name: Build Library (make)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -53,10 +52,9 @@ jobs:
       - name: Build library
         run: make
 
-  # 3. Multi-OS & Multi-Version Nim Unit Tests
+  # Multi-OS & Multi-Version Nim Unit Tests
   test-nim:
-    name: 3. Test Nim (${{ matrix.os }}, Nim ${{ matrix.nim-version }})
-    needs: [build]
+    name: Test Nim (${{ matrix.os }}, Nim ${{ matrix.nim-version }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -76,10 +74,9 @@ jobs:
       - name: Run Nim Unit Tests
         run: make test-nim
 
-  # 4. Bidirectional Rust ↔ Nim Cross-Verification
+  # Bidirectional Rust ↔ Nim Cross-Verification
   test-cross:
-    name: 4. Cross-Verification (${{ matrix.os }})
-    needs: [build]
+    name: Cross-Verification (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
