@@ -15,9 +15,9 @@ defaults:
     shell: bash
 
 jobs:
-  # Fast formatting & style check
-  format-check:
-    name: Format Check (nph)
+  # Lint & code formatting check
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -32,8 +32,8 @@ jobs:
       - name: Install nph (pinned to latest master)
         run: nimble install -y https://github.com/arnetheduck/nph.git@#773fa32
 
-      - name: Verify formatting
-        run: make format-check
+      - name: Run Linters (formatting, package check, style check)
+        run: make lint
 
   # Compile library with default make
   build:

@@ -1,4 +1,4 @@
-.PHONY: help build examples test test-nim test-cross format format-check install-deps clean
+.PHONY: help build examples test test-nim test-cross format format-check lint install-deps clean
 .DEFAULT_GOAL := build
 
 # Variables
@@ -17,6 +17,7 @@ help:
 	@echo "  make examples     - Build and run Nim examples"
 	@echo "  make format       - Format all Nim files with nph"
 	@echo "  make format-check - Check if Nim files are formatted"
+	@echo "  make lint         - Run all linters (formatting, package check, style check)"
 	@echo "  make install-deps - Install Nim dependencies via nimble develop"
 	@echo "  make clean        - Clean build artifacts"
 
@@ -102,6 +103,14 @@ format-check:
 	 nph --check tests/test_cross_verification.nim && \
 	 echo "All files are properly formatted." || \
 	 (echo "Some files are not formatted. Run 'make format' to fix." && exit 1)
+
+# Run all linters: nph format check, nimble package check, and nim style check
+lint: install-deps format-check
+	@echo "Checking nimble package validity..."
+	@nimble check
+	@echo "Checking compiler style and semantics..."
+	@nim check $(NIM_SRC)/bincode.nim
+	@echo "All lint checks passed."
 
 # Clean build artifacts
 clean:
